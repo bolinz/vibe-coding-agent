@@ -553,16 +553,30 @@ export class SidecarFeishuChannel extends BaseChannel {
   // ========== Utilities ==========
 
   private findSidecarBinary(): string | null {
-    const candidates = [
-      path.join(process.cwd(), 'sidecars', 'feishu', 'feishu-sidecar'),
-      path.join(process.cwd(), 'sidecars', 'feishu', 'feishu-sidecar-darwin-arm64'),
-      path.join(__dirname, '..', '..', 'sidecars', 'feishu', 'feishu-sidecar'),
-      path.join(os.homedir(), '.vibe-agent', 'sidecars', 'feishu-sidecar'),
-    ];
+    const platform = os.platform();
+    const arch = os.arch();
+    // Map arch names to binary suffixes (Go uses amd64, Node.js uses x64)
+    const archVariants = arch === 'x64' ? ['x64', 'amd64'] : [arch];
+    const platformArchs = archVariants.map((a) => `${platform}-${a}`);
+
+    const candidates: string[] = [];
+    // Platform-specific binary first (e.g. feishu-sidecar-linux-amd64)
+    for (const pa of platformArchs) {
+      candidates.push(path.join(process.cwd(), 'sidecars', 'feishu', `feishu-sidecar-${pa}`));
+    }
+    // Fallback: generic binary name (symlink or actual file)
+    candidates.push(path.join(process.cwd(), 'sidecars', 'feishu', 'feishu-sidecar'));
+    for (const pa of platformArchs) {
+      candidates.push(path.join(__dirname, '..', '..', 'sidecars', 'feishu', `feishu-sidecar-${pa}`));
+    }
+    candidates.push(path.join(__dirname, '..', '..', 'sidecars', 'feishu', 'feishu-sidecar'));
+    candidates.push(path.join(os.homedir(), '.vibe-agent', 'sidecars', 'feishu-sidecar'));
     for (const c of candidates) {
       try {
-        if (require('fs').existsSync(c)) {
-          return c;
+        const fs = require('fs');
+        if (fs.existsSync(c)) {
+          // Resolve symlinks to the actual binary path
+          return fs.realpathSync(c);
         }
       } catch {
         // ignore

@@ -146,8 +146,9 @@ async function main() {
 
   console.log('[Agent] Agents registered:', agentManager.listNames());
 
-  // Initialize channels
-  const feishuChannel = process.env.USE_FEISHU_SIDECAR === 'true'
+  // Initialize channels — prefer sidecar mode unless explicitly disabled
+  const useSidecar = process.env.USE_FEISHU_SIDECAR !== 'false';
+  const feishuChannel = useSidecar
     ? new SidecarFeishuChannel(router, sessionManager, {
         appId: config.feishu.appId,
         appSecret: config.feishu.appSecret,
@@ -158,6 +159,7 @@ async function main() {
         appSecret: config.feishu.appSecret,
         domain: (process.env.FEISHU_DOMAIN as 'feishu' | 'lark') ?? 'feishu',
       });
+  console.log(`[Feishu] Using ${useSidecar ? 'Sidecar' : 'Direct WS'} mode`);
   const wsChannel = new WebSocketChannel(router, { port: config.port });
   const sshChannel = new SSHChannel(router);
 
