@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Coding Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header & Navigation */
+    .header {
+      background: #16213e;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 {
+      font-size: 1.2rem;
+      color: #00d9ff;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .nav-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+    .nav-btn {
+      background: transparent;
+      border: 1px solid #0f3460;
+      color: #aaa;
+      padding: 0.4rem 0.8rem;
+      border-radius: 0.4rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover, .nav-btn.active {
+      border-color: #00d9ff;
+      color: #00d9ff;
+      background: rgba(0, 217, 255, 0.1);
+    }
+
+    /* View container */
+    .view {
+      flex: 1;
+      overflow-y: auto;
+      display: none;
+    }
+    .view.active { display: flex; flex-direction: column; }
+
+    /* ========== WELCOME PAGE ========== */
+    .welcome-page {
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    .welcome-card {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 1rem;
+      padding: 2.5rem;
+      max-width: 480px;
+      width: 100%;
+      text-align: center;
+    }
+    .welcome-card .icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .welcome-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+      color: #00d9ff;
+    }
+    .welcome-card p.desc {
+      color: #aaa;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+    .welcome-card .features {
+      text-align: left;
+      background: #1a1a2e;
+      border-radius: 0.5rem;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+      color: #ccc;
+    }
+    .welcome-card .features li {
+      margin: 0.4rem 0;
+      list-style: none;
+    }
+    .welcome-card .features li::before {
+      content: "✓ ";
+      color: #00d9ff;
+    }
+
+    /* Quick config form */
+    .quick-config {
+      text-align: left;
+      margin-bottom: 1.5rem;
+    }
+    .quick-config label {
+      display: block;
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 0.25rem;
+      margin-top: 0.75rem;
+    }
+    .quick-config input, .quick-config select {
+      width: 100%;
+      padding: 0.6rem 0.8rem;
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 0.4rem;
+      color: #eee;
+      font-size: 0.95rem;
+    }
+    .quick-config input:focus, .quick-config select:focus {
+      outline: none;
+      border-color: #00d9ff;
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 0.75rem;
+      background: #00d9ff;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #00b8d9; }
+    .btn-secondary {
+      width: 100%;
+      padding: 0.6rem;
+      background: transparent;
+      color: #aaa;
+      border: 1px solid #0f3460;
+      border-radius: 0.5rem;
+      margin-top: 0.75rem;
+      cursor: pointer;
+    }
+    .btn-secondary:hover { color: #eee; border-color: #666; }
+
+    /* ========== CHAT PAGE ========== */
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .message {
+      max-width: 80%;
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .message.user {
+      background: #0f3460;
+      align-self: flex-end;
+      border-bottom-right-radius: 0.25rem;
+    }
+    .message.assistant {
+      background: #16213e;
+      align-self: flex-start;
+      border-bottom-left-radius: 0.25rem;
+    }
+    .message.system {
+      background: transparent;
+      color: #666;
+      font-size: 0.85rem;
+      align-self: center;
+      text-align: center;
+    }
+    .message.error {
+      background: #4a1a1a;
+      color: #ff6b6b;
+      align-self: flex-start;
+    }
+    .typing {
+      display: flex;
+      gap: 0.25rem;
+      padding: 0.75rem 1rem;
+      background: #16213e;
+      align-self: flex-start;
+      border-radius: 0.75rem;
+      border-bottom-left-radius: 0.25rem;
+    }
+    .typing span {
+      width: 8px; height: 8px;
+      background: #00d9ff;
+      border-radius: 50%;
+      animation: typing 1s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes typing {
+      0%, 100% { opacity: 0.3; transform: translateY(0); }
+      50% { opacity: 1; transform: translateY(-4px); }
+    }
+    .input-area {
+      padding: 1rem;
+      background: #16213e;
+      border-top: 1px solid #0f3460;
+    }
+    .input-container {
+      display: flex;
+      gap: 0.5rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .input-container input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 0.5rem;
+      color: #eee;
+      font-size: 1rem;
+    }
+    .input-container input:focus {
+      outline: none;
+      border-color: #00d9ff;
+    }
+    .input-container button {
+      padding: 0.75rem 1.5rem;
+      background: #00d9ff;
+      color: #1a1a2e;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .input-container button:hover { background: #00b8d9; }
+    .input-container button:disabled { background: #555; cursor: not-allowed; }
+
+    /* ========== CONFIG PAGE ========== */
+    .config-page {
+      padding: 1.5rem 2rem;
+      max-width: 720px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .config-section {
+      margin-bottom: 2rem;
+    }
+    .config-section h3 {
+      font-size: 1rem;
+      color: #00d9ff;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #0f3460;
+    }
+    .config-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0;
+    }
+    .config-row label {
+      width: 160px;
+      font-size: 0.9rem;
+      color: #ccc;
+      flex-shrink: 0;
+    }
+    .config-row .desc {
+      font-size: 0.75rem;
+      color: #666;
+      margin-top: 0.15rem;
+    }
+    .config-row input, .config-row select {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      border-radius: 0.4rem;
+      color: #eee;
+      font-size: 0.9rem;
+    }
+    .config-row input:focus, .config-row select:focus {
+      outline: none;
+      border-color: #00d9ff;
+    }
+    .config-row input[type="password"] {
+      font-family: monospace;
+    }
+    .config-row .toggle-vis {
+      background: transparent;
+      border: none;
+      color: #666;
+      cursor: pointer;
+      font-size: 1rem;
+      padding: 0.25rem;
+    }
+    .config-row .toggle-vis:hover { color: #00d9ff; }
+    .config-row .restart-tag {
+      font-size: 0.7rem;
+      color: #ff9f43;
+      background: rgba(255, 159, 67, 0.15);
+      padding: 0.1rem 0.4rem;
+      border-radius: 0.2rem;
+      margin-left: 0.5rem;
+    }
+    .config-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid #0f3460;
+    }
+    .config-actions button {
+      padding: 0.6rem 1.2rem;
+      border-radius: 0.4rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-save { background: #00d9ff; color: #1a1a2e; }
+    .btn-save:hover { background: #00b8d9; }
+    .btn-reset { background: transparent; color: #aaa; border: 1px solid #0f3460; }
+    .btn-reset:hover { border-color: #ff6b6b; color: #ff6b6b; }
+
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: #16213e;
+      border: 1px solid #00d9ff;
+      color: #00d9ff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s;
+      pointer-events: none;
+      z-index: 100;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <h1><span>🤖</span> AI Coding Agent</h1>
+    <div class="nav-buttons">
+      <button class="nav-btn" data-view="welcome" title="欢迎">❓</button>
+      <button class="nav-btn active" data-view="chat" title="聊天">💬</button>
+      <button class="nav-btn" data-view="config" title="设置">⚙️</button>
+    </div>
+  </div>
+
+  <!-- Welcome View -->
+  <div class="view welcome-page" id="view-welcome">
+    <div class="welcome-card">
+      <div class="icon">🤖</div>
+      <h2>AI Coding Agent</h2>
+      <p class="desc">基于 TypeScript/Bun 的多渠道 AI Agent 共享会话框架</p>
+      <ul class="features">
+        <li>飞书 Bot 实时接入</li>
+        <li>Web 实时聊天界面</li>
+        <li>SSH 终端接入</li>
+        <li>多 Agent 可插拔（Aider / Claude / Echo）</li>
+        <li>工具链调用（Shell / Git / File）</li>
+      </ul>
+      <div class="quick-config">
+        <label>OpenAI API Key</label>
+        <input type="password" id="wc-openai-key" placeholder="sk-...">
+        <label>Anthropic API Key</label>
+        <input type="password" id="wc-anthropic-key" placeholder="sk-...">
+        <label>默认 Agent</label>
+        <select id="wc-default-agent">
+          <option value="echo">Echo（测试模式）</option>
+          <option value="aider">Aider（编码助手）</option>
+          <option value="claude">Claude（Anthropic）</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="wc-save">保存并开始使用</button>
+      <button class="btn-secondary" id="wc-skip">跳过配置，使用 Echo 测试模式</button>
+    </div>
+  </div>
+
+  <!-- Chat View -->
+  <div class="view chat-page active" id="view-chat">
+    <div class="chat-container" id="chat"></div>
+    <div class="input-area">
+      <div class="input-container">
+        <input type="text" id="messageInput" placeholder="输入消息..." autocomplete="off">
+        <button id="sendBtn">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config View -->
+  <div class="view config-page" id="view-config">
+    <div id="config-form"></div>
+    <div class="config-actions">
+      <button class="btn-save" id="cfg-save">💾 保存配置</button>
+      <button class="btn-reset" id="cfg-reset">🔄 重置为默认</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ==================== ROUTING ====================
+    function showView(name) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('view-' + name).classList.add('active');
+      document.querySelector('.nav-btn[data-view="' + name + '"]').classList.add('active');
+      location.hash = '#/' + name;
+    }
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => showView(btn.dataset.view));
+    });
+
+    // Check first visit
+    if (!localStorage.getItem('vibe_agent_visited')) {
+      showView('welcome');
+    } else {
+      const hash = location.hash.replace('#/', '') || 'chat';
+      showView(hash === 'welcome' ? 'welcome' : hash === 'config' ? 'config' : 'chat');
+    }
+
+    // ==================== TOAST ====================
+    function toast(msg) {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      setTimeout(() => el.classList.remove('show'), 2500);
+    }
+
+    // ==================== API ====================
+    async function apiGet(path) {
+      const res = await fetch('/api' + path);
+      return res.json();
+    }
+    async function apiPost(path, body) {
+      const res = await fetch('/api' + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      return res.json();
+    }
+
+    // ==================== CHAT ====================
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    let sse = null;
+    let wsFallback = null;
+    let useSSE = true;
+    let sessionId = localStorage.getItem('sessionId') || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36));
+    localStorage.setItem('sessionId', sessionId);
+
+    function connectSSE() {
+      if (sse) { sse.close(); sse = null; }
+      useSSE = true;
+
+      sse = new EventSource(`/api/chat/${sessionId}/sse`);
+      sse.onopen = () => addMessage('system', '已连接到 AI Agent (SSE)');
+      sse.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'response') {
+            removeTyping();
+            addMessage('assistant', data.content);
+          } else if (data.type === 'error') {
+            removeTyping();
+            addMessage('system', '错误: ' + data.content);
+          }
+        } catch {}
+      };
+      sse.onerror = () => {
+        addMessage('system', 'SSE 连接断开，尝试 WebSocket...');
+        sse.close();
+        sse = null;
+        useSSE = false;
+        connectWS();
+      };
+    }
+
+    function connectWS() {
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsFallback = new WebSocket(`${protocol}//${location.host}/ws?sessionId=${sessionId}`);
+      wsFallback.onopen = () => addMessage('system', '已连接到 AI Agent (WebSocket)');
+      wsFallback.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'response') {
+          removeTyping();
+          addMessage('assistant', data.content);
+        }
+      };
+      wsFallback.onclose = () => {
+        addMessage('system', '连接断开，3秒后重连...');
+        setTimeout(connectWS, 3000);
+      };
+      wsFallback.onerror = (err) => console.error('WebSocket error:', err);
+    }
+
+    function addMessage(role, content) {
+      const msg = document.createElement('div');
+      msg.className = `message ${role}`;
+      msg.textContent = content;
+      chat.appendChild(msg);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    function showTyping() {
+      const typing = document.createElement('div');
+      typing.className = 'typing';
+      typing.id = 'typing';
+      typing.innerHTML = '<span></span><span></span><span></span>';
+      chat.appendChild(typing);
+      chat.scrollTop = chat.scrollHeight;
+    }
+    function removeTyping() {
+      const typing = document.getElementById('typing');
+      if (typing) typing.remove();
+    }
+    async function send() {
+      const message = input.value.trim();
+      if (!message) return;
+      addMessage('user', message);
+      input.value = '';
+      showTyping();
+
+      if (useSSE) {
+        // Send via HTTP POST
+        try {
+          await fetch(`/api/chat/${sessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, message, userId: sessionId })
+          });
+        } catch (err) {
+          addMessage('system', '发送失败: ' + (err.message || '网络错误'));
+          removeTyping();
+        }
+      } else if (wsFallback && wsFallback.readyState === WebSocket.OPEN) {
+        wsFallback.send(JSON.stringify({ sessionId, message, userId: sessionId }));
+      } else {
+        addMessage('system', '未连接，无法发送');
+        removeTyping();
+      }
+    }
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') send(); });
+    connectSSE();
+
+    // ==================== WELCOME ====================
+    document.getElementById('wc-save').addEventListener('click', async () => {
+      const openaiKey = document.getElementById('wc-openai-key').value.trim();
+      const anthropicKey = document.getElementById('wc-anthropic-key').value.trim();
+      const agent = document.getElementById('wc-default-agent').value;
+
+      const updates = {};
+      if (openaiKey) updates['openai_api_key'] = openaiKey;
+      if (anthropicKey) updates['anthropic_api_key'] = anthropicKey;
+      updates['default_agent'] = agent;
+
+      if (Object.keys(updates).length > 0) {
+        await apiPost('/config/batch', updates);
+        await apiPost('/config/reload');
+      }
+
+      localStorage.setItem('vibe_agent_visited', '1');
+      toast('配置已保存！');
+      showView('chat');
+    });
+
+    document.getElementById('wc-skip').addEventListener('click', () => {
+      localStorage.setItem('vibe_agent_visited', '1');
+      showView('chat');
+    });
+
+    // ==================== CONFIG ====================
+    const CONFIG_CATEGORIES = {
+      ai: 'AI 服务配置',
+      agent: 'Agent 设置',
+      channel: '渠道配置',
+      system: '系统配置'
+    };
+
+    let configEntries = [];
+
+    async function loadConfig() {
+      const data = await apiGet('/config');
+      configEntries = data.entries || [];
+      renderConfigForm();
+    }
+
+    function renderConfigForm() {
+      const container = document.getElementById('config-form');
+      const byCategory = {};
+      for (const entry of configEntries) {
+        if (!byCategory[entry.category]) byCategory[entry.category] = [];
+        byCategory[entry.category].push(entry);
+      }
+
+      let html = '';
+      for (const [cat, label] of Object.entries(CONFIG_CATEGORIES)) {
+        const items = byCategory[cat];
+        if (!items || items.length === 0) continue;
+        html += `<div class="config-section"><h3>${label}</h3>`;
+        for (const item of items) {
+          const isPassword = item.encrypted;
+          const needsRestart = item.key === 'port' || item.key === 'host' || item.key === 'redis_url';
+          html += `
+            <div class="config-row">
+              <div>
+                <label>${item.key}</label>
+                <div class="desc">${item.description}${needsRestart ? '<span class="restart-tag">需重启</span>' : ''}</div>
+              </div>
+              <div style="flex:1;display:flex;align-items:center;gap:0.5rem;">
+                <input type="${isPassword ? 'password' : 'text'}" id="cfg-${item.key}" value="${escapeHtml(item.value)}" data-key="${item.key}" data-encrypted="${item.encrypted}">
+                ${isPassword ? `<button class="toggle-vis" onclick="toggleVisibility('cfg-${item.key}')">👁</button>` : ''}
+              </div>
+            </div>`;
+        }
+        // Add Feishu QR code section for channel category
+        if (cat === 'channel') {
+          html += renderFeishuSection();
+        }
+        html += '</div>';
+      }
+      container.innerHTML = html;
+      // Load Feishu status after rendering
+      loadFeishuStatus();
+    }
+
+    function renderFeishuSection() {
+      return `
+        <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;border-radius:0.5rem;border:1px solid #0f3460;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
+            <h4 style="color:#00d9ff;font-size:0.95rem;">飞书机器人连接</h4>
+            <span id="feishu-status-badge" style="font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:0.3rem;background:#4a1a1a;color:#ff6b6b;">未连接</span>
+          </div>
+
+          <!-- Method 1: QR Code Registration (Recommended) -->
+          <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #0f3460;">
+            <p style="font-size:0.8rem;color:#00d9ff;margin-bottom:0.5rem;font-weight:600;">方式一：扫码创建机器人（推荐）</p>
+            <div style="display:flex;gap:1.5rem;align-items:flex-start;">
+              <div style="flex-shrink:0;">
+                <div id="feishu-register-qr" style="width:160px;height:160px;background:#16213e;border-radius:0.5rem;display:flex;align-items:center;justify-content:center;color:#666;font-size:0.8rem;overflow:hidden;">
+                  点击下方按钮生成二维码
+                </div>
+                <div id="feishu-register-status" style="text-align:center;margin-top:0.5rem;font-size:0.75rem;color:#888;"></div>
+              </div>
+              <div style="flex:1;">
+                <p style="font-size:0.85rem;color:#aaa;margin-bottom:0.75rem;line-height:1.5;">
+                  1. 点击「扫码创建机器人」<br>
+                  2. 用飞书 App 扫码 → 点「授权同意」<br>
+                  3. 系统自动获取 App ID / App Secret<br>
+                  4. 点击「测试连接」验证
+                </p>
+                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                  <button class="btn-primary" onclick="handleFeishuRegister()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">扫码创建机器人</button>
+                  <button class="btn-secondary" onclick="handleFeishuTest()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">测试连接</button>
+                </div>
+                <div id="feishu-test-result" style="margin-top:0.5rem;font-size:0.8rem;color:#aaa;"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Method 2: Manual Config -->
+          <div>
+            <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">方式二：手动配置（已有应用）</p>
+            <div id="feishu-manual-hint" style="font-size:0.8rem;color:#666;">
+              在上方填写 feishu_app_id、feishu_app_secret、feishu_verification_token
+            </div>
+          </div>
+        </div>`;
+    }
+
+    let feishuSse = null;
+
+    async function handleFeishuRegister() {
+      // Close previous SSE
+      if (feishuSse) { feishuSse.close(); feishuSse = null; }
+
+      const qrContainer = document.getElementById('feishu-register-qr');
+      const statusDiv = document.getElementById('feishu-register-status');
+      qrContainer.innerHTML = '<div style="color:#666;">初始化中...</div>';
+      statusDiv.textContent = '';
+
+      try {
+        const data = await apiPost('/feishu/register/init', {});
+        if (!data.success) {
+          qrContainer.innerHTML = `<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">${data.message || '初始化失败'}</div>`;
+          return;
+        }
+
+        // Generate QR code from qrUrl
+        const qrUrl = data.qrUrl;
+        try {
+          const QRCode = await import('https://cdn.skypack.dev/qrcode');
+          const svg = await QRCode.toString(qrUrl, {
+            type: 'svg',
+            width: 160,
+            margin: 1,
+            color: { dark: '#00d9ff', light: '#16213e' }
+          });
+          qrContainer.innerHTML = svg;
+        } catch {
+          // Fallback: show URL as text
+          qrContainer.innerHTML = `<div style="padding:0.5rem;font-size:0.7rem;word-break:break-all;color:#00d9ff;">${qrUrl}</div>`;
+        }
+
+        statusDiv.textContent = '等待扫码...';
+        statusDiv.style.color = '#00d9ff';
+
+        // Connect SSE for real-time status
+        const deviceCode = data.deviceCode;
+        feishuSse = new EventSource(`/api/feishu/register/${encodeURIComponent(deviceCode)}/sse`);
+
+        feishuSse.onmessage = async (event) => {
+          try {
+            const reg = JSON.parse(event.data);
+            if (reg.done) {
+              feishuSse.close();
+              feishuSse = null;
+              return;
+            }
+
+            if (reg.status === 'success') {
+              feishuSse.close();
+              feishuSse = null;
+
+              // Auto-fill credentials
+              const appIdInput = document.getElementById('cfg-feishu_app_id');
+              const appSecretInput = document.getElementById('cfg-feishu_app_secret');
+              if (appIdInput) appIdInput.value = reg.appId || '';
+              if (appSecretInput) appSecretInput.value = reg.appSecret || '';
+
+              // Save to DB
+              await apiPost('/config/batch', {
+                feishu_app_id: reg.appId || '',
+                feishu_app_secret: reg.appSecret || '',
+              });
+              await apiPost('/config/reload');
+
+              qrContainer.innerHTML = '<div style="color:#00d9ff;font-size:2rem;">✓</div>';
+              statusDiv.textContent = '创建成功！凭证已自动填充';
+              statusDiv.style.color = '#00d9ff';
+              toast('飞书机器人创建成功！');
+
+              updateFeishuBadge(true);
+            } else if (reg.status === 'denied') {
+              feishuSse.close();
+              feishuSse = null;
+              statusDiv.textContent = '用户拒绝授权';
+              statusDiv.style.color = '#ff6b6b';
+            } else if (reg.status === 'expired') {
+              feishuSse.close();
+              feishuSse = null;
+              statusDiv.textContent = '二维码已过期';
+              statusDiv.style.color = '#ff6b6b';
+            } else if (reg.status === 'error') {
+              feishuSse.close();
+              feishuSse = null;
+              statusDiv.textContent = '错误: ' + (reg.error || '未知错误');
+              statusDiv.style.color = '#ff6b6b';
+            }
+          } catch {
+            // SSE errors are transient
+          }
+        };
+      } catch (error) {
+        qrContainer.innerHTML = `<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">${error.message || '初始化失败'}</div>`;
+      }
+    }
+
+    async function handleFeishuTest() {
+      const resultDiv = document.getElementById('feishu-test-result');
+      resultDiv.textContent = '测试中...';
+      resultDiv.style.color = '#aaa';
+      try {
+        const data = await apiPost('/feishu/test', {});
+        if (data.success) {
+          resultDiv.textContent = '✅ ' + data.message;
+          resultDiv.style.color = '#00d9ff';
+          updateFeishuBadge(true);
+        } else {
+          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.style.color = '#ff6b6b';
+          updateFeishuBadge(false);
+        }
+      } catch (err) {
+        resultDiv.textContent = '❌ 测试失败: ' + (err.message || '网络错误');
+        resultDiv.style.color = '#ff6b6b';
+      }
+    }
+
+    async function loadFeishuStatus() {
+      // Auto-check status on load
+      try {
+        const status = await apiGet('/feishu/status');
+        updateFeishuBadge(status.connected);
+      } catch {
+        // Ignore
+      }
+    }
+
+    function updateFeishuBadge(connected) {
+      const badge = document.getElementById('feishu-status-badge');
+      if (!badge) return;
+      if (connected) {
+        badge.textContent = '已连接';
+        badge.style.background = '#1a4a1a';
+        badge.style.color = '#00d9ff';
+      } else {
+        badge.textContent = '未连接';
+        badge.style.background = '#4a1a1a';
+        badge.style.color = '#ff6b6b';
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    window.toggleVisibility = function(id) {
+      const input = document.getElementById(id);
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
+
+    document.getElementById('cfg-save').addEventListener('click', async () => {
+      const updates = {};
+      document.querySelectorAll('#config-form input[data-key]').forEach(input => {
+        const key = input.dataset.key;
+        const value = input.value.trim();
+        updates[key] = value;
+      });
+      await apiPost('/config/batch', updates);
+      await apiPost('/config/reload');
+      toast('配置已保存并热加载！');
+      loadConfig();
+    });
+
+    document.getElementById('cfg-reset').addEventListener('click', async () => {
+      if (!confirm('确定要重置所有配置为默认值吗？')) return;
+      await apiPost('/config/reset');
+      toast('配置已重置');
+      loadConfig();
+    });
+
+    // Load config when entering config page
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((m) => {
+        if (m.target.id === 'view-config' && m.target.classList.contains('active')) {
+          loadConfig();
+        }
+      });
+    });
+    observer.observe(document.getElementById('view-config'), { attributes: true, attributeFilter: ['class'] });
+  </script>
+</body>
+</html>
