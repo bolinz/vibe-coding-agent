@@ -23,7 +23,7 @@
 | 文件 | 说明 | 行数 |
 |------|------|------|
 | `src/core/sidecar-rpc.ts` | stdio JSON-RPC 客户端 | 200 |
-| `src/channels/sidecar-feishu.ts` | Sidecar 版飞书 Channel | 567 |
+| `src/channels/sidecar-feishu.ts` | Sidecar 版飞书 Channel | 591 |
 
 **核心能力：**
 - ✅ 进程管理（spawn/kill）
@@ -34,7 +34,8 @@
 
 `src/index.ts` 自动切换：
 ```typescript
-const feishuChannel = process.env.USE_FEISHU_SIDECAR === 'true'
+const useSidecar = process.env.USE_FEISHU_SIDECAR !== 'false';  // 默认启用
+const feishuChannel = useSidecar
   ? new SidecarFeishuChannel(...)
   : new FeishuChannel(...);
 ```

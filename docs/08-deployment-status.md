@@ -1,6 +1,6 @@
 # 部署状态报告
 
-**更新时间**: 2026-04-28
+**更新时间**: 2026-04-29
 
 ---
 
@@ -173,7 +173,7 @@ OPENAI_API_KEY=dummy-key-for-llama-cpp
 ┌─────────────────────────────────────────────────────────────┐
 │ 客户端层                                                     │
 │  浏览器 WebUI ✅   SSE ✅ (优先)   WebSocket ✅ (降级)       │
-│  飞书 Bot ⚠️                                      欢迎页 ✅  │
+│  飞书 Bot ✅ (Sidecar)                            欢迎页 ✅  │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
@@ -214,7 +214,7 @@ OPENAI_API_KEY=dummy-key-for-llama-cpp
 | **Hermes llama.cpp** | ✅ 已配置 | `auto` provider + `base_url: 192.168.100.182:8082` |
 | **Claude Code** | ❌ 未登录 | `claude` CLI 需运行 `/login` |
 | **OPENAI_API_KEY** | ❌ 未配置 | Aider Agent 需要 |
-| **飞书 Bot** | ⚠️ 可扫码创建 | 配置页「方式一：扫码创建机器人」 |
+| **飞书 Bot** | ✅ 已连接 | Sidecar 模式，Go 二进制 (feishu-sidecar-linux-amd64) |
 | **Redis 持久化** | ❌ 未启用 | 当前 Memory 存储 |
 
 ---
@@ -320,7 +320,7 @@ curl -s -X POST https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/int
 
 ## 下一步
 
-1. 配置 Hermes：`hermes setup` 或设置 provider API key
-2. 配置 Claude Code：运行 `claude /login`
-3. 安装 Aider：`pip install aider-chat`
-4. 启用 Redis：`docker-compose up -d redis`
+1. 配置 Claude Code：运行 `claude /login`
+2. 安装 Aider：`pip install aider-chat`
+3. 启用 Redis：`docker-compose up -d redis`
+4. Channel 架构重构: 提取共享卡片/菜单逻辑，删除死代码 `feishu.ts`，引入 ChannelRegistry 统一事件分发
