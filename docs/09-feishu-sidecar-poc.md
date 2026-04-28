@@ -136,11 +136,46 @@ scripts/
   setup-feishu.ts    (新增)
 ```
 
-## ⚠️ 已知限制
+## ⚠️ 已知限制与踩坑记录
 
 1. **部署复杂度增加**：需要编译 Go 二进制（`cd sidecars/feishu && make build`）
 2. **跨平台编译**：macOS (ARM64) 已测试，Linux 需要 `GOOS=linux GOARCH=amd64 make build`
 3. **Fallback**：如果 sidecar 启动失败，服务会静默跳过飞书连接（不会崩溃）
+
+### ⚠️ 跨平台二进制部署（重要）
+
+**问题：** `sidecars/feishu/feishu-sidecar` 默认是 macOS ARM64 二进制，在 Linux 服务器上执行报 `ENOEXEC` 错误
+
+**解决方案：**
+```bash
+# 在服务器上建立符号链接或重命名
+cd sidecars/feishu
+ln -sf feishu-sidecar-linux-amd64 feishu-sidecar
+# 或：mv feishu-sidecar-linux-amd64 feishu-sidecar
+
+# 验证
+cd sidecars/feishu
+file feishu-sidecar        # 应该显示 ELF 64-bit LSB executable
+./feishu-sidecar --help    # 应该能正常执行
+```
+
+**代码层面：** `findSidecarBinary()` 现在优先查找平台特定二进制（如 `feishu-sidecar-linux-amd64`），并使用 `fs.realpathSync()` 解析符号链接到实际路径。
+
+### ⚠️ SESSION_SECRET 一致性（重要）
+
+**问题：** SQLite 中的 `feishu_app_secret` 使用 `SESSION_SECRET` 做 XOR 加密。如果本地调试时用了不同的 `SESSION_SECRET`，会损坏服务器上的加密数据。
+
+**解决方案：**
+- 确保本地 `.env` 和远程 `SESSION_SECRET` 一致
+- 如果数据已损坏，在服务器上直接用正确的明文重新保存：
+```bash
+ssh <REMOTE> "cd <DIR> && source ~/.bash_profile && cat > fix.ts << 'EOF'
+import { ConfigManager } from './src/core/config';
+const cm = new ConfigManager();
+cm.set('feishu_app_secret', 'your-correct-secret');
+EOF
+bun run fix.ts && rm fix.ts"
+```
 
 ## 🔧 构建部署
 

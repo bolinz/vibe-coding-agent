@@ -243,7 +243,78 @@ SESSION_SECRET=change-me-in-production-at-least-32-characters
 2. **Claude Code 未登录** — `claude` CLI 需要运行 `/login` 认证
 3. **Aider 未安装** — 服务器上没有 `aider` 命令
 4. **Redis 未启用** — 当前使用内存存储（进程重启数据丢失）
-5. **SSE 连接 10s 超时** — 已修复：`idleTimeout: 255`
+5. ~~**SSE 连接 10s 超时**~~ ✅ 已修复：`idleTimeout: 255`
+
+---
+
+## 部署踩坑记录
+
+### ⚠️ 修改 src/ 文件后必须用 `bun run build`
+
+**错误做法：** 修改 `src/index.ts` 后直接 `bun run src/index.ts`
+**后果：** Bun 会缓存编译结果，导致修改不生效，调试时看到的一直是旧代码
+**正确做法：**
+```bash
+# 修改 src/ 文件后
+bun run build                    # 生成 dist/index.js
+rsync -avz dist/index.js <REMOTE>:<DIR>/dist/
+# 然后远程运行 bun run dist/index.js
+```
+
+### ⚠️ SESSION_SECRET 必须保持一致
+
+**错误做法：** 本地和远程使用不同的 `.env` 或默认 `SESSION_SECRET`
+**后果：** SQLite 中的加密字段（如 `feishu_app_secret`）使用 `SESSION_SECRET` 做 XOR 加密。密钥不一致会导致解密失败，飞书凭据变成乱码
+**正确做法：**
+```bash
+# 1. 确保本地和远程使用相同的 SESSION_SECRET
+# 2. 如果已经加密错乱，用正确的 SESSION_SECRET 重新保存
+ssh <REMOTE> "cd <DIR> && source ~/.bash_profile && cat > fix.ts << 'EOF'
+import { ConfigManager } from './src/core/config';
+const cm = new ConfigManager();
+// 用正确的明文 secret 重新加密保存
+cm.set('feishu_app_secret', 'your-correct-secret');
+EOF
+bun run fix.ts && rm fix.ts"
+```
+
+### ⚠️ Feishu Sidecar 跨平台二进制
+
+**问题：** `sidecars/feishu/feishu-sidecar` 是 macOS ARM64 二进制，在 Linux 上执行报 `ENOEXEC`
+**解决：** `findSidecarBinary()` 现在优先查找平台特定二进制（如 `feishu-sidecar-linux-amd64`），回退到通用名称时使用 `fs.realpathSync()` 解析符号链接
+**服务器端确保：**
+```bash
+ls -la sidecars/feishu/
+# 应该看到：
+# feishu-sidecar -> feishu-sidecar-linux-amd64 (符号链接)
+# 或直接使用 feishu-sidecar-linux-amd64
+```
+
+### ⚠️ Feishu 凭据配置检查清单
+
+如果飞书消息无回应，按顺序检查：
+
+```bash
+ssh <REMOTE> "cd <DIR> && source ~/.bash_profile && cat > check.ts << 'EOF'
+import { ConfigManager } from './src/core/config';
+const cm = new ConfigManager();
+console.log('feishu_app_id:', cm.get('feishu_app_id'));
+console.log('feishu_app_secret valid:', cm.get('feishu_app_secret')?.length === 32);
+console.log('feishu_domain:', cm.get('feishu_domain') || 'feishu (default)');
+EOF
+bun run check.ts && rm check.ts"
+
+# 测试 token 获取
+curl -s -X POST https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal \
+  -H "Content-Type: application/json" \
+  -d '{"app_id":"cli_xxx","app_secret":"your-secret"}'
+# 应该返回 {"code":0,"tenant_access_token":"t-xxx"}
+```
+
+**飞书后台必须配置：**
+1. **事件订阅** → 添加事件 `im.message.receive_v1`
+2. **权限管理** → 开启 `im:chat:readonly`、`im:message:send_as_bot`
+3. **机器人能力** → 开启「接收消息」
 
 ---
 
