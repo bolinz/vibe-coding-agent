@@ -1,5 +1,5 @@
 import type { Router } from '../../core/router';
-import type { Session } from '../../core/types';
+import type { Session, AgentType } from '../../core/types';
 
 /**
  * Card builder for Feishu interactive cards.
@@ -37,6 +37,12 @@ export class FeishuCardBuilder {
               text: { tag: 'plain_text', content: '🤖 切换 Agent' },
               type: 'default',
               value: { action: 'switch_agent' },
+            },
+            {
+              tag: 'button',
+              text: { tag: 'plain_text', content: '📋 切换会话' },
+              type: 'default',
+              value: { action: 'switch_session' },
             },
             {
               tag: 'button',
@@ -112,6 +118,44 @@ export class FeishuCardBuilder {
               text: { tag: 'plain_text', content: '📋 打开控制台' },
               type: 'primary',
               value: { action: 'open_menu' },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  buildSessionListCard(sessions: Array<{ id: string; agentType: string; messageCount: number }>, currentSessionId?: string): Record<string, unknown> {
+    const actions = sessions.map((s) => ({
+      tag: 'button',
+      text: { tag: 'plain_text', content: `${s.id === currentSessionId ? '✅ ' : ''}${s.agentType} (${s.messageCount}条)` },
+      type: s.id === currentSessionId ? 'primary' : 'default',
+      value: { action: 'set_session', sessionId: s.id },
+    }));
+
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: '📋 切换会话' },
+        template: 'blue',
+      },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: '选择一个会话：',
+          },
+        },
+        {
+          tag: 'action',
+          actions: [
+            ...actions,
+            {
+              tag: 'button',
+              text: { tag: 'plain_text', content: '🔙 返回' },
+              type: 'danger',
+              value: { action: 'back_to_menu' },
             },
           ],
         },

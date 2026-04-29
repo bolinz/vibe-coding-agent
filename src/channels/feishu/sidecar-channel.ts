@@ -1,4 +1,3 @@
-import type { AgentType, Session } from '../../core/types';
 import type { Channel, ChannelCapabilities, OutgoingMessage } from '../types';
 import type { Router } from '../../core/router';
 import type { SessionManager } from '../../core/session';
@@ -203,6 +202,34 @@ export class SidecarFeishuChannel implements Channel {
         };
       }
 
+      case 'switch_session': {
+        const sessions = await this.sessionManager.listByUserId(userId);
+        const current = await this.sessionManager.getByUserId(userId);
+        return {
+          card: this.cardBuilder.buildSessionListCard(
+            sessions.map((s) => ({ id: s.id, agentType: s.agentType, messageCount: s.messages.length })),
+            current?.id,
+          ),
+          toast: { type: 'info', content: '请选择会话' },
+        };
+      }
+
+      case 'set_session': {
+        const sessionId = value?.sessionId as string;
+        if (!sessionId) {
+          return {
+            card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
+            toast: { type: 'error', content: '无效会话' },
+          };
+        }
+        setTimeout(() => this.doSetSession(userId, sessionId), 0);
+        const targetSession = await this.sessionManager.get(sessionId);
+        return {
+          card: this.cardBuilder.buildMenuCard(targetSession?.agentType ?? this.router.getDefaultAgent(), sessionId),
+          toast: { type: 'success', content: `已切换至 ${sessionId.slice(0, 8)}...` },
+        };
+      }
+
       case 'info': {
         const session = await this.sessionManager.getByUserId(userId);
         return {
@@ -236,15 +263,10 @@ export class SidecarFeishuChannel implements Channel {
   // ===== Async Side Effects =====
 
   private async doNewSession(userId: string): Promise<void> {
-    const existing = await this.sessionManager.getByUserId(userId);
-    if (existing) {
-      await this.sessionManager.close(existing.id).catch(() => {});
-    }
     await this.sessionManager.create(
       userId,
       this.router.getDefaultAgent(),
       { workingDir: '/projects/sandbox' },
-      userId
     );
   }
 
@@ -254,6 +276,14 @@ export class SidecarFeishuChannel implements Channel {
       await this.sessionManager.switchAgent(session.id, agentName);
     } else {
       await this.sessionManager.create(userId, agentName, { workingDir: '/projects/sandbox' }, userId);
+    }
+  }
+
+  private async doSetSession(userId: string, sessionId: string): Promise<void> {
+    const session = await this.sessionManager.get(sessionId);
+    if (session) {
+      session.updatedAt = new Date();
+      await this.sessionManager.update(session);
     }
   }
 }
