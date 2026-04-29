@@ -3,9 +3,9 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { Server } from 'bun';
 import type { Router } from '../core/router';
-import type { BaseChannel } from '../channels/base';
-import type { WebSocketChannel } from '../channels/websocket';
-import type { BunWebSocket } from '../core/types';
+import type { ChannelManager } from '../core/channel-manager';
+import type { WebSocketChannel } from '../channels/websocket/channel';
+import type { BunWebSocket } from '../channels/types';
 import type { EventBus } from '../core/event';
 import { ConfigManager } from '../core/config';
 import { readFileSync } from 'fs';
@@ -22,25 +22,25 @@ export class WebServer {
   private app: Hono;
   private config: ServerConfig;
   private router: Router;
-  private feishuChannel: BaseChannel;
+  private channelManager: ChannelManager;
   private wsChannel: WebSocketChannel;
   private eventBus: EventBus;
 
   constructor(
     router: Router,
-    feishuChannel: BaseChannel,
+    channelManager: ChannelManager,
     wsChannel: WebSocketChannel,
     eventBus: EventBus,
     config: Partial<ServerConfig> = {}
   ) {
     this.app = new Hono();
     this.router = router;
-    this.feishuChannel = feishuChannel;
+    this.channelManager = channelManager;
     this.wsChannel = wsChannel;
     this.eventBus = eventBus;
     this.config = {
       port: config.port ?? 3000,
-      host: config.host ?? '0.0.0.0'
+      host: config.host ?? '0.0.0.0',
     };
 
     this.setupMiddleware();
@@ -58,15 +58,22 @@ export class WebServer {
       return c.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
-        wsConnections: this.wsChannel.getConnectionCount()
+        wsConnections: this.wsChannel.getConnectionCount(),
+        channels: this.channelManager.listActive().map((ch) => ({
+          type: ch.type,
+          connected: ch.isConnected(),
+        })),
       });
     });
 
-    // Feishu webhook
+    // Feishu webhook (deprecated — Sidecar handles all Feishu events)
     this.app.post('/feishu/webhook', async (c) => {
       try {
         const body = await c.req.json();
-        await this.feishuChannel.handleMessage(body);
+        const feishu = this.channelManager.get('feishu');
+        if (feishu) {
+          await feishu.handleEvent(body);
+        }
         return c.json({ code: 0 });
       } catch (error) {
         console.error('[Feishu] Webhook error:', error);
@@ -111,7 +118,7 @@ export class WebServer {
         const system = cm.getSystemEntries();
         return c.json({
           entries,
-          system: system.slice(0, 20) // Limit system vars
+          system: system.slice(0, 20),
         });
       } catch (error) {
         console.error('[Config] Get error:', error);
@@ -189,8 +196,6 @@ export class WebServer {
           return c.json({ error: 'Feishu App ID not configured' }, 400);
         }
 
-        // Generate Feishu app share link
-        // Format: https://applink.feishu.cn/client/mini_program/open?appId=${appId}
         const shareUrl = `https://applink.feishu.cn/client/mini_program/open?appId=${appId}`;
 
         const svg = await QRCode.toString(shareUrl, {
@@ -199,8 +204,8 @@ export class WebServer {
           margin: 2,
           color: {
             dark: '#00d9ff',
-            light: '#1a1a2e'
-          }
+            light: '#1a1a2e',
+          },
         });
 
         return c.body(svg, 200, { 'Content-Type': 'image/svg+xml' });
@@ -221,17 +226,16 @@ export class WebServer {
             configured: false,
             appId: appId ? `${appId.slice(0, 6)}...` : null,
             connected: false,
-            message: 'App ID or App Secret not configured'
+            message: 'App ID or App Secret not configured',
           });
         }
 
-        // Try to get tenant access token to verify connection
         const response = await fetch(
           'https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal',
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ app_id: appId, app_secret: appSecret })
+            body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
           }
         );
 
@@ -242,13 +246,13 @@ export class WebServer {
           configured: true,
           appId: `${appId.slice(0, 6)}...`,
           connected,
-          message: connected ? 'Connection successful' : `Connection failed: ${data.msg}`
+          message: connected ? 'Connection successful' : `Connection failed: ${data.msg}`,
         });
       } catch (error) {
         return c.json({
           configured: true,
           connected: false,
-          message: error instanceof Error ? error.message : 'Unknown error'
+          message: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     });
@@ -268,7 +272,7 @@ export class WebServer {
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ app_id: appId, app_secret: appSecret })
+            body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
           }
         );
 
@@ -281,12 +285,12 @@ export class WebServer {
         return c.json({
           success: true,
           message: 'Connection successful',
-          tokenPreview: data.tenant_access_token ? `${data.tenant_access_token.slice(0, 10)}...` : null
+          tokenPreview: data.tenant_access_token ? `${data.tenant_access_token.slice(0, 10)}...` : null,
         });
       } catch (error) {
         return c.json({
           success: false,
-          message: error instanceof Error ? error.message : 'Unknown error'
+          message: error instanceof Error ? error.message : 'Unknown error',
         }, 500);
       }
     });
@@ -305,7 +309,7 @@ export class WebServer {
         console.error('[Feishu] Registration init error:', error);
         return c.json({
           success: false,
-          message: error instanceof Error ? error.message : 'Failed to start registration'
+          message: error instanceof Error ? error.message : 'Failed to start registration',
         }, 500);
       }
     });
@@ -330,12 +334,12 @@ export class WebServer {
       } catch (error) {
         return c.json({
           success: false,
-          message: error instanceof Error ? error.message : 'Unknown error'
+          message: error instanceof Error ? error.message : 'Unknown error',
         }, 500);
       }
     });
 
-    // Feishu registration SSE stream (replaces polling)
+    // Feishu registration SSE stream
     api.get('/feishu/register/:deviceCode/sse', async (c) => {
       const deviceCode = c.req.param('deviceCode');
       const reg = getRegistration(deviceCode);
@@ -353,7 +357,6 @@ export class WebServer {
             } catch {}
           };
 
-          // Send initial state
           send({
             status: reg.status,
             appId: reg.appId,
@@ -362,14 +365,12 @@ export class WebServer {
             error: reg.error,
           });
 
-          // If already finalized, close immediately
           if (reg.status !== 'pending') {
             send({ done: true });
             controller.close();
             return;
           }
 
-          // Subscribe to updates
           const unsubscribe = subscribeRegistration(deviceCode, (updated) => {
             send({
               status: updated.status,
@@ -384,7 +385,6 @@ export class WebServer {
             }
           });
 
-          // Heartbeat every 15s to keep connection alive
           const heartbeat = setInterval(() => {
             try {
               controller.enqueue(encoder.encode(':heartbeat\n\n'));
@@ -393,12 +393,11 @@ export class WebServer {
             }
           }, 15000);
 
-          // Cleanup on client disconnect
           c.req.raw.signal.addEventListener('abort', () => {
             clearInterval(heartbeat);
             unsubscribe();
           });
-        }
+        },
       });
 
       return new Response(stream, {
@@ -406,7 +405,7 @@ export class WebServer {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-        }
+        },
       });
     });
 
@@ -419,18 +418,15 @@ export class WebServer {
           return c.json({ error: 'Message is required' }, 400);
         }
 
-        // Route through the router (same as WebSocket)
-        const unifiedMessage = {
+        await this.router.route({
           sessionId,
           channelId: sessionId,
           userId: body.userId ?? sessionId,
-          role: 'user' as const,
+          role: 'user',
           content: body.message.trim(),
-          channel: 'websocket' as const,
+          channel: 'websocket',
           timestamp: new Date(),
-        };
-
-        await this.router.route(unifiedMessage);
+        });
         return c.json({ success: true });
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
@@ -439,9 +435,7 @@ export class WebServer {
       }
     });
 
-
-
-    // Chat SSE stream (primary method for browser clients)
+    // Chat SSE stream
     api.get('/chat/:sessionId/sse', async (c) => {
       const sessionId = c.req.param('sessionId');
 
@@ -455,7 +449,6 @@ export class WebServer {
             } catch {}
           };
 
-          // Subscribe to agent.response events for this session
           const unsubscribe = this.eventBus.subscribeSession(sessionId, (event) => {
             if (event.type === 'agent.response') {
               const data = event.data as { content?: string };
@@ -475,7 +468,6 @@ export class WebServer {
             }
           });
 
-          // Heartbeat
           const heartbeat = setInterval(() => {
             try {
               controller.enqueue(encoder.encode(':heartbeat\n\n'));
@@ -488,7 +480,7 @@ export class WebServer {
             clearInterval(heartbeat);
             unsubscribe();
           });
-        }
+        },
       });
 
       return new Response(stream, {
@@ -496,39 +488,33 @@ export class WebServer {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-        }
+        },
       });
     });
 
     this.app.route('/api', api);
 
-    // Fallback
     this.app.notFound((c) => {
       return c.json({ error: 'Not found' }, 404);
     });
   }
 
   async start(): Promise<void> {
-    // Store reference to wsChannel for callbacks
     const wsChannel = this.wsChannel;
 
     const server: Server<{ sessionId: string }> = Bun.serve({
       port: this.config.port,
       hostname: this.config.host,
-      idleTimeout: 255, // Max allowed; prevents SSE connections from timing out
+      idleTimeout: 255,
       fetch: async (request) => {
         const url = new URL(request.url);
 
-        // WebSocket upgrade
         if (url.pathname === '/ws') {
           const sessionId = url.searchParams.get('sessionId') || 'default';
           const upgrade = server.upgrade(request, { data: { sessionId } });
-          if (upgrade) {
-            return;
-          }
+          if (upgrade) return;
         }
 
-        // Handle HTTP
         return this.app.fetch(request);
       },
       websocket: {
@@ -546,8 +532,8 @@ export class WebServer {
         close(ws) {
           const sessionId = (ws as unknown as { data: { sessionId: string } }).data?.sessionId || 'default';
           wsChannel.removeConnection(sessionId, ws as unknown as BunWebSocket);
-        }
-      }
+        },
+      },
     });
 
     console.log(`[Server] Running on http://${this.config.host}:${this.config.port}`);

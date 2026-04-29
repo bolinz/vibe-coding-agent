@@ -1,5 +1,5 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { SidecarFeishuChannel } from '../../src/channels/sidecar-feishu';
+import { SidecarFeishuChannel } from '../../src/channels/feishu/sidecar-channel';
 import { SessionManager, MemorySessionStore } from '../../src/core/session';
 import { Router } from '../../src/core/router';
 import { EventBus } from '../../src/core/event';

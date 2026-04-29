@@ -141,12 +141,21 @@ agent-framework/
 │   │   └── sidecar-rpc.ts     # JSON-RPC 2.0 over stdio
 │   │
 │   ├── channels/              # 渠道接入
-│   │   ├── base.ts           # BaseChannel 抽象类
-│   │   ├── sidecar-feishu.ts # Go Sidecar 飞书 (生产在用)
-│   │   ├── feishu.ts         # 直连模式飞书 (已休眠，等待删除)
-│   │   ├── feishu-register.ts# 扫码注册飞书 Bot (独立工具)
-│   │   ├── websocket.ts      # Bun WebSocket
-│   │   └── ssh.ts            # Tmux SSH
+│   │   ├── types.ts          # Channel 接口 + 消息类型 + Factory 类型
+│   │   ├── channel-manager.ts# ChannelManager (统一生命周期 + 广播)
+│   │   ├── feishu/           # 飞书 Sidecar 实现
+│   │   │   ├── sidecar-channel.ts  # 精简版 Channel 实现
+│   │   │   ├── card-builder.ts     # 卡片构建 (提取共享)
+│   │   │   ├── menu-state.ts       # 菜单状态机 (提取共享)
+│   │   │   ├── binary.ts           # Sidecar 二进制查找
+│   │   │   └── factory.ts          # FeishuChannelFactory
+│   │   ├── websocket/
+│   │   │   ├── channel.ts    # WebSocketChannel
+│   │   │   └── factory.ts    # WebSocketChannelFactory
+│   │   ├── ssh/
+│   │   │   ├── channel.ts    # SSHChannel
+│   │   │   └── factory.ts    # SSHChannelFactory
+│   │   └── feishu-register.ts# 扫码注册飞书 Bot (独立工具)
 │   │
 │   ├── agents/               # Agent 层 (声明式 + Pipeline)
 │   │   ├── manager.ts        # AgentManager — 注册/查询/删除
@@ -357,27 +366,126 @@ class SidecarRPC extends EventEmitter {
 
 ## 5. 渠道接入
 
-### 5.1 Channel 接口
+### 5.1 Channel 接口 (新架构)
 
 ```typescript
-// src/core/types.ts & src/channels/base.ts
+// src/channels/types.ts
 
-interface Channel {
-  readonly type: ChannelType;     // 'feishu' | 'websocket' | 'ssh'
-  readonly name: string;
-  connect(): Promise<void>;
-  disconnect(): Promise<void>;
-  handleMessage(event: unknown): Promise<void>;
-  send(sessionId: string, message: string): Promise<void>;
+export interface ChannelCapabilities {
+  text: boolean;         // 支持文本
+  cards: boolean;        // 支持交互式卡片
+  images: boolean;       // 支持图片
+  files: boolean;        // 支持文件
+  richText: boolean;     // 支持富文本/Markdown
+  cardActions: boolean;  // 支持卡片按钮回调
 }
 
-abstract class BaseChannel implements Channel {
-  protected router: Router;
-  protected createUnifiedMessage(...): UnifiedMessage;
+export interface Channel {
+  readonly type: string;                          // 开放 string，非闭联合
+  readonly name: string;
+  readonly capabilities: ChannelCapabilities;      // 能力声明
+
+  connect(): Promise<void>;
+  disconnect(): Promise<void>;
+  isConnected(): boolean;
+
+  handleEvent(event: unknown): Promise<void>;
+
+  // 结构化消息，不再是纯字符串
+  send(sessionId: string, message: OutgoingMessage): Promise<void>;
+}
+
+// 统一入站消息
+export interface IncomingMessage {
+  channel: string;
+  channelId: string;
+  sessionId: string;
+  userId: string;
+  role: 'user' | 'assistant' | 'system';
+  text: string;                               // 纯文本，给 agent 消费
+  attachments?: MessageAttachment[];           // 可选富内容
+  metadata?: Record<string, unknown>;          // Channel 特有元数据
+  timestamp: Date;
+}
+
+// 统一出站消息
+export interface OutgoingMessage {
+  text: string;                                // 主要文本（所有 channel 支持）
+  card?: Record<string, unknown>;              // 可选卡片（按 capability）
+  attachments?: MessageAttachment[];           // 可选附件
+  options?: Record<string, unknown>;
 }
 ```
 
-### 5.2 飞书渠道 (Sidecar 模式 — 生产)
+**关键特性：**
+- `Channel.type` 是开放 `string`，不再是 `'feishu' | 'websocket' | 'ssh'` 封闭联合
+- `capabilities` 声明 channel 能力，广播时按能力分发
+- 消息携带结构，不再退化为纯文本
+
+### 5.2 ChannelManager — 统一生命周期管理
+
+```typescript
+// src/core/channel-manager.ts
+
+class ChannelManager {
+  // === Factory 管理 ===
+  registerFactory(factory: ChannelFactory): void;
+  listFactories(): ChannelFactory[];
+  listAvailableTypes(): string[];
+
+  // === 实例管理 ===
+  async enable(type: string, config: Record<string, unknown>): Promise<void>;
+  disable(type: string): void;
+  get<T extends Channel>(type: string): T | null;
+  listActive(): Channel[];
+
+  // === 生命周期 ===
+  async connectAll(): Promise<void>;      // 遍历所有已注册 channel → connect
+  async disconnectAll(): Promise<void>;   // 遍历所有已注册 channel → disconnect
+
+  // === 能力感知广播 ===
+  async broadcastText(sessionId: string, text: string): Promise<void>;
+  async broadcastCard(sessionId: string, text: string, card: Record<string, unknown>): Promise<void>;
+  async broadcast(sessionId: string, message: OutgoingMessage): Promise<void>;
+}
+```
+
+### 5.3 ChannelFactory — 统一创建方式
+
+```typescript
+// src/channels/types.ts
+
+export interface ChannelFactory {
+  readonly type: string;
+  readonly description: string;
+  readonly capabilities: ChannelCapabilities;
+
+  // 用一个统一的 config + deps 创建 channel
+  create(config: Record<string, unknown>, deps: ChannelDependencies): Channel;
+}
+
+export interface ChannelDependencies {
+  router: Router;
+  sessionManager: SessionManager;
+}
+```
+
+每个平台实现自己的 Factory，例如：
+
+```typescript
+// src/channels/feishu/factory.ts
+class FeishuChannelFactory implements ChannelFactory {
+  type = 'feishu';
+  description = '飞书 Bot (Sidecar)';
+  capabilities = { text: true, cards: true, images: false, files: false, richText: true, cardActions: true };
+
+  create(config, deps) {
+    return new SidecarFeishuChannel(deps.router, deps.sessionManager, { ... });
+  }
+}
+```
+
+### 5.4 飞书渠道 (Sidecar 模式 — 生产)
 
 ```
 用户@飞书 → Feishu WS → Go Sidecar → stdin JSON-RPC → Node.js
@@ -391,25 +499,45 @@ abstract class BaseChannel implements Channel {
 
 - 卡片按钮点击: Sidecar 同步返回 `CardActionTriggerResponse` (卡片更新 + toast)
 - 文本消息: Sidecar → Node.js `handleSidecarMessage()` → Router → Pipeline
-- 发送: `rpc.call('sendMessage', ...)` 或 `rpc.call('sendCardSync', ...)`
+- 发送: `send(OutgoingMessage{ text, card })` — 按 capability 选 text 或 card
 
-### 5.3 WebSocket 渠道
+### 5.5 WebSocket 渠道
 
 ```
 用户浏览器 → Bun.serve WebSocket upgrade → WebSocketChannel
   ├── handleWSMessage() → UnifiedMessage → Router.route()
-  └── send() → JSON 推送至所有同 sessionId 的 WS 连接
+  └── send(OutgoingMessage) → JSON.text 推送至所有同 sessionId 的 WS 连接
 ```
 
 - SSE 渠道通过 `/api/chat/:sessionId/sse` + EventBus 订阅实现
+- Capabilities: text only（卡片、图片不支持）
 
-### 5.4 SSH 渠道
+### 5.6 SSH 渠道
 
 ```
 用户 SSH → 附加 tmux session → SSHChannel
   ├── handleMessage() → UnifiedMessage → Router.route()
-  └── send() → tmux send-keys 写入
+  └── send(OutgoingMessage) → tmux send-keys 写入 OutgoingMessage.text
 ```
+
+- Capabilities: text only
+
+### 5.7 新增一个 Channel 的流程
+
+以 DingTalk 为例：
+
+```typescript
+// 1. 创建 src/channels/dingtalk/channel.ts — 实现 Channel 接口
+// 2. 创建 src/channels/dingtalk/factory.ts — 实现 ChannelFactory
+// 3. 在 index.ts 加一条:
+channelManager.registerFactory(new DingTalkChannelFactory());
+// 4. 在 SQLite 写入配置:
+cm.set('channel_dingtalk_appKey', 'xxx');
+cm.set('channel_dingtalk_appSecret', 'yyy');
+// 5. 重启 → channelManager.initFromConfig() 自动创建 → 连接
+```
+
+**无需改：** `types.ts`、`router.ts`、`index.ts`（除了注册 factory）、`server.ts`、`event.ts`
 
 ---
 

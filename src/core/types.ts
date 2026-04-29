@@ -1,5 +1,5 @@
-// Channel types
-export type ChannelType = 'feishu' | 'websocket' | 'ssh';
+/** @deprecated Use Channel interface from src/channels/types.ts */
+export type ChannelType = string;
 
 // Bun WebSocket type - compatible with Bun's ServerWebSocket
 export type BunWebSocket = {
@@ -9,6 +9,7 @@ export type BunWebSocket = {
   data?: unknown;
 };
 
+/** @deprecated Use Channel from src/channels/types.ts */
 export interface Channel {
   readonly type: ChannelType;
   readonly name: string;

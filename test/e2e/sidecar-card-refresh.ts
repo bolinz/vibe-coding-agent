@@ -11,12 +11,15 @@
  */
 
 import { SidecarRPC } from '../../src/core/sidecar-rpc';
-import { SidecarFeishuChannel } from '../../src/channels/sidecar-feishu';
+import { SidecarFeishuChannel } from '../../src/channels/feishu/sidecar-channel';
 import { SessionManager, MemorySessionStore } from '../../src/core/session';
 import { Router } from '../../src/core/router';
 import { EventBus } from '../../src/core/event';
-import { AgentRegistry, ToolRegistry } from '../../src/core/registry';
-import { EchoAgent } from '../../src/agents/echo';
+import { ToolRegistry } from '../../src/core/registry';
+import { PipelineEngine } from '../../src/agents/pipeline/executor';
+import { AgentManager } from '../../src/agents/manager';
+import { RuntimeRegistry } from '../../src/agents/runtime/registry';
+import { CLIRuntime } from '../../src/agents/runtime/cli';
 import * as path from 'path';
 
 async function sleep(ms: number): Promise<void> {
@@ -32,10 +35,19 @@ async function runTest() {
   const store = new MemorySessionStore();
   const sessionManager = new SessionManager(store);
   const eventBus = new EventBus();
-  const agentRegistry = new AgentRegistry();
   const toolRegistry = new ToolRegistry();
-  agentRegistry.register('echo', new EchoAgent());
-  const router = new Router(sessionManager, agentRegistry, eventBus, toolRegistry, 'echo');
+  const agentManager = new AgentManager();
+  const runtimeRegistry = new RuntimeRegistry();
+  runtimeRegistry.register('cli', new CLIRuntime());
+  agentManager.register({
+    name: 'echo',
+    description: 'Simple echo agent for testing',
+    runtimeType: 'cli',
+    config: { command: 'echo', args: ['Echo:'] },
+    capabilities: { streaming: false, multiTurn: false },
+  });
+  const pipeline = new PipelineEngine(agentManager, runtimeRegistry, toolRegistry, { maxToolRounds: 10 });
+  const router = new Router(sessionManager, agentManager, eventBus, toolRegistry, pipeline, 'echo');
 
   const channel = new SidecarFeishuChannel(router, sessionManager, {
     appId: 'test',

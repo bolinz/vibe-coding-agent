@@ -1,5 +1,5 @@
-import type { ChannelType, BunWebSocket } from '../core/types';
-import { BaseChannel } from './base';
+import type { ChannelCapabilities, OutgoingMessage, BunWebSocket } from '../types';
+import type { Router } from '../../core/router';
 
 interface WSMessage {
   sessionId?: string;
@@ -11,15 +11,24 @@ interface WSConfig {
   port: number;
 }
 
-export class WebSocketChannel extends BaseChannel {
-  readonly type: ChannelType = 'websocket';
+export class WebSocketChannel {
+  readonly type = 'websocket';
   readonly name = 'WebSocket Server';
+  readonly capabilities: ChannelCapabilities = {
+    text: true,
+    cards: false,
+    images: false,
+    files: false,
+    richText: false,
+    cardActions: false,
+  };
 
   private connections: Map<string, Set<BunWebSocket>> = new Map();
   private config: WSConfig;
+  private router: Router;
 
-  constructor(router: import('../core/router').Router, config: WSConfig) {
-    super(router);
+  constructor(router: Router, config: WSConfig) {
+    this.router = router;
     this.config = config;
   }
 
@@ -28,7 +37,6 @@ export class WebSocketChannel extends BaseChannel {
   }
 
   async disconnect(): Promise<void> {
-    // Close all connections
     for (const conns of this.connections.values()) {
       for (const ws of conns) {
         ws.close();
@@ -38,23 +46,27 @@ export class WebSocketChannel extends BaseChannel {
     console.log('[WebSocket] Disconnected');
   }
 
-  handleMessage(event: unknown): Promise<void> {
-    // Messages are handled via WebSocket upgrade
+  isConnected(): boolean {
+    return true;
+  }
+
+  handleEvent(_event: unknown): Promise<void> {
     return Promise.resolve();
   }
 
-  async send(sessionId: string, message: string): Promise<void> {
+  async send(sessionId: string, message: OutgoingMessage): Promise<void> {
     const connections = this.connections.get(sessionId);
     if (!connections) return;
 
     const payload = JSON.stringify({
       type: 'response',
-      content: message,
-      timestamp: new Date().toISOString()
+      content: message.text,
+      ...(message.card ? { card: message.card } : {}),
+      timestamp: new Date().toISOString(),
     });
 
     for (const ws of connections) {
-      if (ws.readyState === 1) { // OPEN
+      if (ws.readyState === 1) {
         ws.send(payload);
       }
     }
@@ -81,14 +93,15 @@ export class WebSocketChannel extends BaseChannel {
     try {
       const parsed = JSON.parse(data) as WSMessage;
 
-      const unifiedMessage = this.createUnifiedMessage(
+      await this.router.route({
+        channel: this.type,
+        channelId: sessionId,
         sessionId,
-        parsed.userId ?? sessionId,
-        parsed.message,
-        sessionId
-      );
-
-      await this.router.route(unifiedMessage);
+        userId: parsed.userId ?? sessionId,
+        role: 'user',
+        content: parsed.message,
+        timestamp: new Date(),
+      });
     } catch (error) {
       console.error('[WebSocket] Error handling message:', error);
       ws.send(JSON.stringify({ type: 'error', content: 'Invalid message format' }));
@@ -103,3 +116,6 @@ export class WebSocketChannel extends BaseChannel {
     return count;
   }
 }
+
+// Re-export for compatibility with BunWebSocket type
+export type { BunWebSocket };

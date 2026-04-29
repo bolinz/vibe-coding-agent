@@ -50,6 +50,6 @@ describe('RuntimeRegistry', () => {
   });
 
   test('should throw for non-existent runtime', () => {
-    expect(() => registry.get('unknown')).toThrow('Runtime not found for type: unknown');
+    expect(() => registry.get('unknown' as any)).toThrow('Runtime not found for type: unknown');
   });
 });
