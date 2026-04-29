@@ -8,6 +8,15 @@ export class SessionManager {
     this.store = store;
   }
 
+  async listByUserId(userId: string): Promise<Session[]> {
+    const all = Array.from(this.sessions.values());
+    return all.filter((s) => s.userId === userId);
+  }
+
+  async listAll(): Promise<Session[]> {
+    return Array.from(this.sessions.values());
+  }
+
   async create(userId: string, agentType: AgentType = 'aider', context: SessionContext = {}, sessionId?: string): Promise<Session> {
     const session: Session = {
       id: sessionId ?? crypto.randomUUID(),
@@ -89,6 +98,7 @@ export interface SessionStore {
   save(session: Session): Promise<void>;
   load(sessionId: string): Promise<Session | null>;
   delete(sessionId: string): Promise<void>;
+  listByUserId?(userId: string): Promise<Session[]>;
 }
 
 // In-memory store for development

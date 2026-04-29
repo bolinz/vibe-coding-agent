@@ -125,7 +125,7 @@ async function main() {
 
   // Web server (needs wsChannel reference for WS lifecycle)
   const wsChannel = channelManager.get<WebSocketChannel>('websocket')!;
-  const webServer = new WebServer(router, channelManager, wsChannel, eventBus, {
+  const webServer = new WebServer(router, channelManager, wsChannel, eventBus, sessionManager, {
     port: config.port,
     host: config.host,
   });

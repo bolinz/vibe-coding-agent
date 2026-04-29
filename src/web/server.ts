@@ -7,6 +7,7 @@ import type { ChannelManager } from '../core/channel-manager';
 import type { WebSocketChannel } from '../channels/websocket/channel';
 import type { BunWebSocket } from '../channels/types';
 import type { EventBus } from '../core/event';
+import type { SessionManager } from '../core/session';
 import { ConfigManager } from '../core/config';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -25,12 +26,14 @@ export class WebServer {
   private channelManager: ChannelManager;
   private wsChannel: WebSocketChannel;
   private eventBus: EventBus;
+  private sessionManager: SessionManager;
 
   constructor(
     router: Router,
     channelManager: ChannelManager,
     wsChannel: WebSocketChannel,
     eventBus: EventBus,
+    sessionManager: SessionManager,
     config: Partial<ServerConfig> = {}
   ) {
     this.app = new Hono();
@@ -38,6 +41,7 @@ export class WebServer {
     this.channelManager = channelManager;
     this.wsChannel = wsChannel;
     this.eventBus = eventBus;
+    this.sessionManager = sessionManager;
     this.config = {
       port: config.port ?? 3000,
       host: config.host ?? '0.0.0.0',
@@ -96,13 +100,77 @@ export class WebServer {
     const api = new Hono();
 
     // Session management
-    api.get('/sessions/:id', (c) => {
-      return c.json({ id: c.req.param('id') });
+    api.get('/sessions', async (c) => {
+      const userId = c.req.query('userId');
+      const sessions = userId
+        ? await this.sessionManager.listByUserId(userId)
+        : await this.sessionManager.listAll();
+      const result = sessions.map((s) => ({
+        id: s.id,
+        userId: s.userId,
+        agentType: s.agentType,
+        state: s.state,
+        messageCount: s.messages.length,
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      }));
+      return c.json({ sessions: result });
+    });
+
+    api.get('/sessions/:id', async (c) => {
+      const id = c.req.param('id');
+      const session = await this.sessionManager.get(id);
+      if (!session) return c.json({ error: 'Session not found' }, 404);
+      return c.json({
+        id: session.id,
+        userId: session.userId,
+        agentType: session.agentType,
+        state: session.state,
+        context: session.context,
+        messages: session.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+          channel: m.channel,
+          timestamp: m.timestamp,
+        })),
+        createdAt: session.createdAt,
+        updatedAt: session.updatedAt,
+      });
+    });
+
+    api.post('/sessions', async (c) => {
+      const body = await c.req.json() as { userId?: string; agentType?: string };
+      const userId = body.userId ?? 'default';
+      const agentType = body.agentType ?? this.router.getDefaultAgent();
+      const session = await this.sessionManager.create(userId, agentType, { workingDir: '/projects/sandbox' });
+      return c.json({
+        id: session.id,
+        userId: session.userId,
+        agentType: session.agentType,
+        createdAt: session.createdAt,
+      }, 201);
+    });
+
+    api.delete('/sessions/:id', async (c) => {
+      const id = c.req.param('id');
+      await this.sessionManager.close(id);
+      return c.json({ success: true });
+    });
+
+    api.post('/sessions/:id/switch-agent', async (c) => {
+      const id = c.req.param('id');
+      const body = await c.req.json() as { agentType: string };
+      if (!body.agentType) return c.json({ error: 'agentType required' }, 400);
+      const session = await this.sessionManager.switchAgent(id, body.agentType);
+      return c.json({
+        id: session.id,
+        agentType: session.agentType,
+      });
     });
 
     // Agent status
     api.get('/agents', (c) => {
-      return c.json({ agents: ['aider', 'claude'] });
+      return c.json({ agents: this.router.getAvailableAgents() });
     });
 
     // Tools

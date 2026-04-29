@@ -14,6 +14,11 @@
       display: flex;
       flex-direction: column;
     }
+    .layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
 
     /* Header & Navigation */
     .header {
@@ -59,6 +64,99 @@
     }
     .view.active { display: flex; flex-direction: column; }
 
+    /* ========== SESSION SIDEBAR ========== */
+    .sidebar {
+      width: 240px;
+      background: #16213e;
+      border-right: 1px solid #0f3460;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .sidebar-header h3 {
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+    .sidebar-header button {
+      background: #00d9ff;
+      border: none;
+      color: #1a1a2e;
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 1rem;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sidebar-header button:hover { background: #00b8d9; }
+    .session-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem;
+    }
+    .session-item {
+      padding: 0.5rem 0.7rem;
+      border-radius: 0.4rem;
+      cursor: pointer;
+      margin-bottom: 0.2rem;
+      transition: all 0.15s;
+      border-left: 3px solid transparent;
+      position: relative;
+    }
+    .session-item:hover {
+      background: rgba(0, 217, 255, 0.05);
+    }
+    .session-item.active {
+      background: rgba(0, 217, 255, 0.1);
+      border-left-color: #00d9ff;
+    }
+    .session-item .session-name {
+      font-size: 0.8rem;
+      color: #eee;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 18px;
+    }
+    .session-item .session-meta {
+      font-size: 0.65rem;
+      color: #666;
+      margin-top: 0.1rem;
+    }
+    .session-item .session-del {
+      position: absolute;
+      top: 0.3rem;
+      right: 0.3rem;
+      background: none;
+      border: none;
+      color: #555;
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0.1rem 0.3rem;
+      opacity: 0;
+      transition: opacity 0.15s;
+      border-radius: 3px;
+    }
+    .session-item:hover .session-del { opacity: 1; }
+    .session-item .session-del:hover { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+
+    .chat-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
     /* ========== WELCOME PAGE ========== */
     .welcome-page {
       align-items: center;
@@ -102,11 +200,10 @@
       list-style: none;
     }
     .welcome-card .features li::before {
-      content: "✓ ";
+      content: "\2713 ";
       color: #00d9ff;
     }
 
-    /* Quick config form */
     .quick-config {
       text-align: left;
       margin-bottom: 1.5rem;
@@ -157,7 +254,7 @@
     }
     .btn-secondary:hover { color: #eee; border-color: #666; }
 
-    /* ========== CHAT PAGE ========== */
+    /* ========== CHAT ========== */
     .chat-container {
       flex: 1;
       overflow-y: auto;
@@ -363,7 +460,6 @@
   </style>
 </head>
 <body>
-  <!-- Header -->
   <div class="header">
     <h1><span>🤖</span> AI Coding Agent</h1>
     <div class="nav-buttons">
@@ -373,7 +469,6 @@
     </div>
   </div>
 
-  <!-- Welcome View -->
   <div class="view welcome-page" id="view-welcome">
     <div class="welcome-card">
       <div class="icon">🤖</div>
@@ -381,10 +476,11 @@
       <p class="desc">基于 TypeScript/Bun 的多渠道 AI Agent 共享会话框架</p>
       <ul class="features">
         <li>飞书 Bot 实时接入</li>
-        <li>Web 实时聊天界面</li>
+        <li>Web 实时聊天界面 (SSE + WebSocket)</li>
         <li>SSH 终端接入</li>
-        <li>多 Agent 可插拔（Aider / Claude / Echo）</li>
-        <li>工具链调用（Shell / Git / File）</li>
+        <li>多 Agent 可插拔 (Hermes / Claude / Aider / Echo)</li>
+        <li>工具链调用 (Shell / Git / File)</li>
+        <li>会话管理 (创建/切换/关闭)</li>
       </ul>
       <div class="quick-config">
         <label>OpenAI API Key</label>
@@ -394,8 +490,9 @@
         <label>默认 Agent</label>
         <select id="wc-default-agent">
           <option value="echo">Echo（测试模式）</option>
-          <option value="aider">Aider（编码助手）</option>
+          <option value="hermes">Hermes（本地推理）</option>
           <option value="claude">Claude（Anthropic）</option>
+          <option value="aider">Aider（编码助手）</option>
         </select>
       </div>
       <button class="btn-primary" id="wc-save">保存并开始使用</button>
@@ -403,18 +500,27 @@
     </div>
   </div>
 
-  <!-- Chat View -->
   <div class="view chat-page active" id="view-chat">
-    <div class="chat-container" id="chat"></div>
-    <div class="input-area">
-      <div class="input-container">
-        <input type="text" id="messageInput" placeholder="输入消息..." autocomplete="off">
-        <button id="sendBtn">发送</button>
+    <div class="layout">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h3>📋 会话</h3>
+          <button id="newSessionBtn" title="新建会话">+</button>
+        </div>
+        <div class="session-list" id="sessionList"></div>
+      </div>
+      <div class="chat-area">
+        <div class="chat-container" id="chat"></div>
+        <div class="input-area">
+          <div class="input-container">
+            <input type="text" id="messageInput" placeholder="输入消息..." autocomplete="off">
+            <button id="sendBtn">发送</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- Config View -->
   <div class="view config-page" id="view-config">
     <div id="config-form"></div>
     <div class="config-actions">
@@ -423,7 +529,6 @@
     </div>
   </div>
 
-  <!-- Toast -->
   <div class="toast" id="toast"></div>
 
   <script>
@@ -440,7 +545,6 @@
       btn.addEventListener('click', () => showView(btn.dataset.view));
     });
 
-    // Check first visit
     if (!localStorage.getItem('vibe_agent_visited')) {
       showView('welcome');
     } else {
@@ -469,6 +573,118 @@
       });
       return res.json();
     }
+    async function apiDelete(path) {
+      const res = await fetch('/api' + path, { method: 'DELETE' });
+      return res.json();
+    }
+
+    // ==================== SESSION MANAGEMENT ====================
+    const USER_ID = localStorage.getItem('userId') ||
+      (crypto.randomUUID ? crypto.randomUUID() : 'user_' + Math.random().toString(36).substring(2, 8));
+    localStorage.setItem('userId', USER_ID);
+
+    let currentSessionId = localStorage.getItem('sessionId') || null;
+
+    async function loadSessions() {
+      const data = await apiGet('/sessions?userId=' + encodeURIComponent(USER_ID));
+      return data.sessions || [];
+    }
+
+    async function initChat() {
+      const sessions = await loadSessions();
+      if (!currentSessionId || !sessions.find(s => s.id === currentSessionId)) {
+        if (sessions.length > 0) {
+          await switchSession(sessions[0].id);
+        } else {
+          await createNewSession();
+        }
+      } else {
+        renderSessionList();
+        await loadMessages(currentSessionId);
+        reconnectSSE();
+      }
+    }
+
+    function renderSessionList() {
+      const list = document.getElementById('sessionList');
+      if (!list) return;
+      loadSessions().then(sessions => {
+        list.innerHTML = sessions.map(s => {
+          const active = s.id === currentSessionId ? 'active' : '';
+          const name = s.agentType + ' ' + s.id.slice(0, 8);
+          return '<div class="session-item ' + active + '" data-id="' + s.id + '">' +
+            '<button class="session-del" data-id="' + s.id + '" title="关闭会话">\u00d7</button>' +
+            '<div class="session-name">' + name + '</div>' +
+            '<div class="session-meta">' + s.messageCount + ' \u6761\u6d88\u606f \u00b7 ' + formatTime(s.createdAt) + '</div>' +
+            '</div>';
+        }).join('');
+
+        list.querySelectorAll('.session-item').forEach(el => {
+          el.addEventListener('click', (e) => {
+            if (e.target.classList.contains('session-del')) return;
+            switchSession(el.dataset.id);
+          });
+        });
+        list.querySelectorAll('.session-del').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            if (!confirm('\u786e\u5b9a\u5173\u95ed\u6b64\u4f1a\u8bdd\uff1f')) return;
+            await apiDelete('/sessions/' + id);
+            if (id === currentSessionId) {
+              currentSessionId = null;
+              document.getElementById('chat').innerHTML = '';
+            }
+            renderSessionList();
+            if (!currentSessionId) {
+              const s = await loadSessions();
+              if (s.length > 0) await switchSession(s[0].id);
+              else await createNewSession();
+            }
+          });
+        });
+      });
+    }
+
+    async function switchSession(sessionId) {
+      currentSessionId = sessionId;
+      localStorage.setItem('sessionId', sessionId);
+      renderSessionList();
+      reconnectSSE();
+      await loadMessages(sessionId);
+    }
+
+    async function createNewSession() {
+      const data = await apiPost('/sessions', { userId: USER_ID });
+      currentSessionId = data.id;
+      localStorage.setItem('sessionId', data.id);
+      document.getElementById('chat').innerHTML = '';
+      addMessage('system', '\u65b0\u4f1a\u8bdd\u5df2\u521b\u5efa');
+      renderSessionList();
+      reconnectSSE();
+      toast('\u65b0\u4f1a\u8bdd\u5df2\u521b\u5efa');
+    }
+
+    async function loadMessages(sessionId) {
+      const data = await apiGet('/sessions/' + sessionId);
+      const chat = document.getElementById('chat');
+      chat.innerHTML = '';
+      if (data.messages && data.messages.length > 0) {
+        for (const m of data.messages) {
+          addMessage(m.role, m.content);
+        }
+      } else {
+        addMessage('system', '\u65b0\u4f1a\u8bdd\u5df2\u521b\u5efa\uff0c\u5f00\u59cb\u5bf9\u8bdd\u5427');
+      }
+    }
+
+    function formatTime(dateStr) {
+      const d = new Date(dateStr);
+      return d.getMonth() + 1 + '/' + d.getDate() + ' ' +
+        String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+    }
+
+    document.getElementById('newSessionBtn').addEventListener('click', createNewSession);
 
     // ==================== CHAT ====================
     const chat = document.getElementById('chat');
@@ -477,29 +693,32 @@
     let sse = null;
     let wsFallback = null;
     let useSSE = true;
-    let sessionId = localStorage.getItem('sessionId') || (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now().toString(36));
-    localStorage.setItem('sessionId', sessionId);
+    let refreshingList = false;
 
-    function connectSSE() {
+    function reconnectSSE() {
       if (sse) { sse.close(); sse = null; }
+      if (wsFallback) { wsFallback.close(); wsFallback = null; }
       useSSE = true;
+      if (!currentSessionId) return;
 
-      sse = new EventSource(`/api/chat/${sessionId}/sse`);
-      sse.onopen = () => addMessage('system', '已连接到 AI Agent (SSE)');
+      sse = new EventSource('/api/chat/' + currentSessionId + '/sse');
       sse.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
           if (data.type === 'response') {
             removeTyping();
             addMessage('assistant', data.content);
+            if (!refreshingList) {
+              refreshingList = true;
+              setTimeout(() => { renderSessionList(); refreshingList = false; }, 500);
+            }
           } else if (data.type === 'error') {
             removeTyping();
-            addMessage('system', '错误: ' + data.content);
+            addMessage('system', '\u9519\u8bef: ' + data.content);
           }
-        } catch {}
+        } catch (e) {}
       };
       sse.onerror = () => {
-        addMessage('system', 'SSE 连接断开，尝试 WebSocket...');
         sse.close();
         sse = null;
         useSSE = false;
@@ -508,9 +727,9 @@
     }
 
     function connectWS() {
+      if (!currentSessionId) return;
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsFallback = new WebSocket(`${protocol}//${location.host}/ws?sessionId=${sessionId}`);
-      wsFallback.onopen = () => addMessage('system', '已连接到 AI Agent (WebSocket)');
+      wsFallback = new WebSocket(protocol + '//' + location.host + '/ws?sessionId=' + currentSessionId);
       wsFallback.onmessage = (event) => {
         const data = JSON.parse(event.data);
         if (data.type === 'response') {
@@ -518,21 +737,18 @@
           addMessage('assistant', data.content);
         }
       };
-      wsFallback.onclose = () => {
-        addMessage('system', '连接断开，3秒后重连...');
-        setTimeout(connectWS, 3000);
-      };
-      wsFallback.onerror = (err) => console.error('WebSocket error:', err);
+      wsFallback.onclose = () => { setTimeout(connectWS, 3000); };
     }
 
     function addMessage(role, content) {
       const msg = document.createElement('div');
-      msg.className = `message ${role}`;
+      msg.className = 'message ' + role;
       msg.textContent = content;
       chat.appendChild(msg);
       chat.scrollTop = chat.scrollHeight;
     }
     function showTyping() {
+      if (document.getElementById('typing')) return;
       const typing = document.createElement('div');
       typing.className = 'typing';
       typing.id = 'typing';
@@ -544,35 +760,38 @@
       const typing = document.getElementById('typing');
       if (typing) typing.remove();
     }
+
     async function send() {
       const message = input.value.trim();
-      if (!message) return;
+      if (!message || !currentSessionId) return;
       addMessage('user', message);
       input.value = '';
       showTyping();
 
       if (useSSE) {
-        // Send via HTTP POST
         try {
-          await fetch(`/api/chat/${sessionId}`, {
+          await fetch('/api/chat/' + currentSessionId, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, message, userId: sessionId })
+            body: JSON.stringify({ message, userId: USER_ID })
           });
         } catch (err) {
-          addMessage('system', '发送失败: ' + (err.message || '网络错误'));
+          addMessage('system', '\u53d1\u9001\u5931\u8d25: ' + (err.message || '\u7f51\u7edc\u9519\u8bef'));
           removeTyping();
         }
       } else if (wsFallback && wsFallback.readyState === WebSocket.OPEN) {
-        wsFallback.send(JSON.stringify({ sessionId, message, userId: sessionId }));
+        wsFallback.send(JSON.stringify({ sessionId: currentSessionId, message, userId: USER_ID }));
       } else {
-        addMessage('system', '未连接，无法发送');
+        addMessage('system', '\u672a\u8fde\u63a5\uff0c\u65e0\u6cd5\u53d1\u9001');
         removeTyping();
       }
     }
+
     sendBtn.addEventListener('click', send);
     input.addEventListener('keypress', (e) => { if (e.key === 'Enter') send(); });
-    connectSSE();
+
+    // Init
+    initChat();
 
     // ==================== WELCOME ====================
     document.getElementById('wc-save').addEventListener('click', async () => {
@@ -591,7 +810,7 @@
       }
 
       localStorage.setItem('vibe_agent_visited', '1');
-      toast('配置已保存！');
+      toast('\u914d\u7f6e\u5df2\u4fdd\u5b58\uff01');
       showView('chat');
     });
 
@@ -602,10 +821,10 @@
 
     // ==================== CONFIG ====================
     const CONFIG_CATEGORIES = {
-      ai: 'AI 服务配置',
-      agent: 'Agent 设置',
-      channel: '渠道配置',
-      system: '系统配置'
+      ai: 'AI \u670d\u52a1\u914d\u7f6e',
+      agent: 'Agent \u8bbe\u7f6e',
+      channel: '\u6e20\u9053\u914d\u7f6e',
+      system: '\u7cfb\u7edf\u914d\u7f6e'
     };
 
     let configEntries = [];
@@ -628,215 +847,157 @@
       for (const [cat, label] of Object.entries(CONFIG_CATEGORIES)) {
         const items = byCategory[cat];
         if (!items || items.length === 0) continue;
-        html += `<div class="config-section"><h3>${label}</h3>`;
+        html += '<div class="config-section"><h3>' + label + '</h3>';
         for (const item of items) {
           const isPassword = item.encrypted;
           const needsRestart = item.key === 'port' || item.key === 'host' || item.key === 'redis_url';
-          html += `
-            <div class="config-row">
-              <div>
-                <label>${item.key}</label>
-                <div class="desc">${item.description}${needsRestart ? '<span class="restart-tag">需重启</span>' : ''}</div>
-              </div>
-              <div style="flex:1;display:flex;align-items:center;gap:0.5rem;">
-                <input type="${isPassword ? 'password' : 'text'}" id="cfg-${item.key}" value="${escapeHtml(item.value)}" data-key="${item.key}" data-encrypted="${item.encrypted}">
-                ${isPassword ? `<button class="toggle-vis" onclick="toggleVisibility('cfg-${item.key}')">👁</button>` : ''}
-              </div>
-            </div>`;
+          html += '<div class="config-row">' +
+            '<div><label>' + item.key + '</label>' +
+            '<div class="desc">' + (item.description || '') + (needsRestart ? '<span class="restart-tag">\u9700\u91cd\u542f</span>' : '') + '</div></div>' +
+            '<div style="flex:1;display:flex;align-items:center;gap:0.5rem;">' +
+            '<input type="' + (isPassword ? 'password' : 'text') + '" id="cfg-' + item.key + '" value="' + escapeHtml(item.value || '') + '" data-key="' + item.key + '" data-encrypted="' + item.encrypted + '">' +
+            (isPassword ? '<button class="toggle-vis" onclick="toggleVisibility(\'cfg-' + item.key + '\')">\uD83D\uDC41</button>' : '') +
+            '</div></div>';
         }
-        // Add Feishu QR code section for channel category
         if (cat === 'channel') {
           html += renderFeishuSection();
         }
         html += '</div>';
       }
       container.innerHTML = html;
-      // Load Feishu status after rendering
       loadFeishuStatus();
     }
 
     function renderFeishuSection() {
-      return `
-        <div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;border-radius:0.5rem;border:1px solid #0f3460;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">
-            <h4 style="color:#00d9ff;font-size:0.95rem;">飞书机器人连接</h4>
-            <span id="feishu-status-badge" style="font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:0.3rem;background:#4a1a1a;color:#ff6b6b;">未连接</span>
-          </div>
+      return '<div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;border-radius:0.5rem;border:1px solid #0f3460;">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">' +
+        '<h4 style="color:#00d9ff;font-size:0.95rem;">\u98de\u4e66\u673a\u5668\u4eba\u8fde\u63a5</h4>' +
+        '<span id="feishu-status-badge" style="font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:0.3rem;background:#4a1a1a;color:#ff6b6b;">\u672a\u8fde\u63a5</span></div>' +
 
-          <!-- Method 1: QR Code Registration (Recommended) -->
-          <div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #0f3460;">
-            <p style="font-size:0.8rem;color:#00d9ff;margin-bottom:0.5rem;font-weight:600;">方式一：扫码创建机器人（推荐）</p>
-            <div style="display:flex;gap:1.5rem;align-items:flex-start;">
-              <div style="flex-shrink:0;">
-                <div id="feishu-register-qr" style="width:160px;height:160px;background:#16213e;border-radius:0.5rem;display:flex;align-items:center;justify-content:center;color:#666;font-size:0.8rem;overflow:hidden;">
-                  点击下方按钮生成二维码
-                </div>
-                <div id="feishu-register-status" style="text-align:center;margin-top:0.5rem;font-size:0.75rem;color:#888;"></div>
-              </div>
-              <div style="flex:1;">
-                <p style="font-size:0.85rem;color:#aaa;margin-bottom:0.75rem;line-height:1.5;">
-                  1. 点击「扫码创建机器人」<br>
-                  2. 用飞书 App 扫码 → 点「授权同意」<br>
-                  3. 系统自动获取 App ID / App Secret<br>
-                  4. 点击「测试连接」验证
-                </p>
-                <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                  <button class="btn-primary" onclick="handleFeishuRegister()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">扫码创建机器人</button>
-                  <button class="btn-secondary" onclick="handleFeishuTest()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">测试连接</button>
-                </div>
-                <div id="feishu-test-result" style="margin-top:0.5rem;font-size:0.8rem;color:#aaa;"></div>
-              </div>
-            </div>
-          </div>
+        '<div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #0f3460;">' +
+        '<p style="font-size:0.8rem;color:#00d9ff;margin-bottom:0.5rem;font-weight:600;">\u65b9\u5f0f\u4e00\uff1a\u626b\u7801\u521b\u5efa\u673a\u5668\u4eba\uff08\u63a8\u8350\uff09</p>' +
+        '<div style="display:flex;gap:1.5rem;align-items:flex-start;">' +
+        '<div style="flex-shrink:0;">' +
+        '<div id="feishu-register-qr" style="width:160px;height:160px;background:#16213e;border-radius:0.5rem;display:flex;align-items:center;justify-content:center;color:#666;font-size:0.8rem;overflow:hidden;">\u70b9\u51fb\u4e0b\u65b9\u6309\u94ae\u751f\u6210\u4e8c\u7ef4\u7801</div>' +
+        '<div id="feishu-register-status" style="text-align:center;margin-top:0.5rem;font-size:0.75rem;color:#888;"></div></div>' +
+        '<div style="flex:1;"><p style="font-size:0.85rem;color:#aaa;margin-bottom:0.75rem;line-height:1.5;">' +
+        '1. \u70b9\u51fb\u300c\u626b\u7801\u521b\u5efa\u673a\u5668\u4eba\u300d<br>' +
+        '2. \u7528\u98de\u4e66 App \u626b\u7801 \u2192 \u70b9\u300c\u6388\u6743\u540c\u610f\u300d<br>' +
+        '3. \u7cfb\u7edf\u81ea\u52a8\u83b7\u53d6 App ID / App Secret<br>' +
+        '4. \u70b9\u51fb\u300c\u6d4b\u8bd5\u8fde\u63a5\u300d\u9a8c\u8bc1</p>' +
+        '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+        '<button class="btn-primary" onclick="handleFeishuRegister()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">\u626b\u7801\u521b\u5efa\u673a\u5668\u4eba</button>' +
+        '<button class="btn-secondary" onclick="handleFeishuTest()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">\u6d4b\u8bd5\u8fde\u63a5</button></div>' +
+        '<div id="feishu-test-result" style="margin-top:0.5rem;font-size:0.8rem;color:#aaa;"></div></div></div></div>' +
 
-          <!-- Method 2: Manual Config -->
-          <div>
-            <p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">方式二：手动配置（已有应用）</p>
-            <div id="feishu-manual-hint" style="font-size:0.8rem;color:#666;">
-              在上方填写 feishu_app_id、feishu_app_secret、feishu_verification_token
-            </div>
-          </div>
-        </div>`;
+        '<div><p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">\u65b9\u5f0f\u4e8c\uff1a\u624b\u52a8\u914d\u7f6e\uff08\u5df2\u6709\u5e94\u7528\uff09</p>' +
+        '<div id="feishu-manual-hint" style="font-size:0.8rem;color:#666;">\u5728\u4e0a\u65b9\u586b\u5199 feishu_app_id\u3001feishu_app_secret\u3001feishu_verification_token</div></div></div>';
     }
 
     let feishuSse = null;
 
     async function handleFeishuRegister() {
-      // Close previous SSE
       if (feishuSse) { feishuSse.close(); feishuSse = null; }
-
       const qrContainer = document.getElementById('feishu-register-qr');
       const statusDiv = document.getElementById('feishu-register-status');
-      qrContainer.innerHTML = '<div style="color:#666;">初始化中...</div>';
+      qrContainer.innerHTML = '<div style="color:#666;">\u521d\u59cb\u5316\u4e2d...</div>';
       statusDiv.textContent = '';
 
       try {
         const data = await apiPost('/feishu/register/init', {});
         if (!data.success) {
-          qrContainer.innerHTML = `<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">${data.message || '初始化失败'}</div>`;
+          qrContainer.innerHTML = '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">' + (data.message || '\u521d\u59cb\u5316\u5931\u8d25') + '</div>';
           return;
         }
 
-        // Generate QR code from qrUrl
         const qrUrl = data.qrUrl;
         try {
           const QRCode = await import('https://cdn.skypack.dev/qrcode');
-          const svg = await QRCode.toString(qrUrl, {
-            type: 'svg',
-            width: 160,
-            margin: 1,
-            color: { dark: '#00d9ff', light: '#16213e' }
-          });
+          const svg = await QRCode.toString(qrUrl, { type: 'svg', width: 160, margin: 1, color: { dark: '#00d9ff', light: '#16213e' } });
           qrContainer.innerHTML = svg;
         } catch {
-          // Fallback: show URL as text
-          qrContainer.innerHTML = `<div style="padding:0.5rem;font-size:0.7rem;word-break:break-all;color:#00d9ff;">${qrUrl}</div>`;
+          qrContainer.innerHTML = '<div style="padding:0.5rem;font-size:0.7rem;word-break:break-all;color:#00d9ff;">' + qrUrl + '</div>';
         }
 
-        statusDiv.textContent = '等待扫码...';
+        statusDiv.textContent = '\u7b49\u5f85\u626b\u7801...';
         statusDiv.style.color = '#00d9ff';
 
-        // Connect SSE for real-time status
         const deviceCode = data.deviceCode;
-        feishuSse = new EventSource(`/api/feishu/register/${encodeURIComponent(deviceCode)}/sse`);
-
+        feishuSse = new EventSource('/api/feishu/register/' + encodeURIComponent(deviceCode) + '/sse');
         feishuSse.onmessage = async (event) => {
           try {
             const reg = JSON.parse(event.data);
-            if (reg.done) {
-              feishuSse.close();
-              feishuSse = null;
-              return;
-            }
-
+            if (reg.done) { feishuSse.close(); feishuSse = null; return; }
             if (reg.status === 'success') {
-              feishuSse.close();
-              feishuSse = null;
-
-              // Auto-fill credentials
+              feishuSse.close(); feishuSse = null;
               const appIdInput = document.getElementById('cfg-feishu_app_id');
               const appSecretInput = document.getElementById('cfg-feishu_app_secret');
               if (appIdInput) appIdInput.value = reg.appId || '';
               if (appSecretInput) appSecretInput.value = reg.appSecret || '';
-
-              // Save to DB
-              await apiPost('/config/batch', {
-                feishu_app_id: reg.appId || '',
-                feishu_app_secret: reg.appSecret || '',
-              });
+              await apiPost('/config/batch', { feishu_app_id: reg.appId || '', feishu_app_secret: reg.appSecret || '' });
               await apiPost('/config/reload');
-
-              qrContainer.innerHTML = '<div style="color:#00d9ff;font-size:2rem;">✓</div>';
-              statusDiv.textContent = '创建成功！凭证已自动填充';
+              qrContainer.innerHTML = '<div style="color:#00d9ff;font-size:2rem;">\u2713</div>';
+              statusDiv.textContent = '\u521b\u5efa\u6210\u529f\uff01\u51ed\u8bc1\u5df2\u81ea\u52a8\u586b\u5145';
               statusDiv.style.color = '#00d9ff';
-              toast('飞书机器人创建成功！');
-
+              toast('\u98de\u4e66\u673a\u5668\u4eba\u521b\u5efa\u6210\u529f\uff01');
               updateFeishuBadge(true);
             } else if (reg.status === 'denied') {
-              feishuSse.close();
-              feishuSse = null;
-              statusDiv.textContent = '用户拒绝授权';
+              feishuSse.close(); feishuSse = null;
+              statusDiv.textContent = '\u7528\u6237\u62d2\u7edd\u6388\u6743';
               statusDiv.style.color = '#ff6b6b';
             } else if (reg.status === 'expired') {
-              feishuSse.close();
-              feishuSse = null;
-              statusDiv.textContent = '二维码已过期';
+              feishuSse.close(); feishuSse = null;
+              statusDiv.textContent = '\u4e8c\u7ef4\u7801\u5df2\u8fc7\u671f';
               statusDiv.style.color = '#ff6b6b';
             } else if (reg.status === 'error') {
-              feishuSse.close();
-              feishuSse = null;
-              statusDiv.textContent = '错误: ' + (reg.error || '未知错误');
+              feishuSse.close(); feishuSse = null;
+              statusDiv.textContent = '\u9519\u8bef: ' + (reg.error || '\u672a\u77e5\u9519\u8bef');
               statusDiv.style.color = '#ff6b6b';
             }
-          } catch {
-            // SSE errors are transient
-          }
+          } catch (e) {}
         };
       } catch (error) {
-        qrContainer.innerHTML = `<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">${error.message || '初始化失败'}</div>`;
+        qrContainer.innerHTML = '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">' + (error.message || '\u521d\u59cb\u5316\u5931\u8d25') + '</div>';
       }
     }
 
     async function handleFeishuTest() {
       const resultDiv = document.getElementById('feishu-test-result');
-      resultDiv.textContent = '测试中...';
+      resultDiv.textContent = '\u6d4b\u8bd5\u4e2d...';
       resultDiv.style.color = '#aaa';
       try {
         const data = await apiPost('/feishu/test', {});
         if (data.success) {
-          resultDiv.textContent = '✅ ' + data.message;
+          resultDiv.textContent = '\u2705 ' + data.message;
           resultDiv.style.color = '#00d9ff';
           updateFeishuBadge(true);
         } else {
-          resultDiv.textContent = '❌ ' + data.message;
+          resultDiv.textContent = '\u274c ' + data.message;
           resultDiv.style.color = '#ff6b6b';
           updateFeishuBadge(false);
         }
       } catch (err) {
-        resultDiv.textContent = '❌ 测试失败: ' + (err.message || '网络错误');
+        resultDiv.textContent = '\u274c \u6d4b\u8bd5\u5931\u8d25: ' + (err.message || '\u7f51\u7edc\u9519\u8bef');
         resultDiv.style.color = '#ff6b6b';
       }
     }
 
     async function loadFeishuStatus() {
-      // Auto-check status on load
       try {
         const status = await apiGet('/feishu/status');
         updateFeishuBadge(status.connected);
-      } catch {
-        // Ignore
-      }
+      } catch (e) {}
     }
 
     function updateFeishuBadge(connected) {
       const badge = document.getElementById('feishu-status-badge');
       if (!badge) return;
       if (connected) {
-        badge.textContent = '已连接';
+        badge.textContent = '\u5df2\u8fde\u63a5';
         badge.style.background = '#1a4a1a';
         badge.style.color = '#00d9ff';
       } else {
-        badge.textContent = '未连接';
+        badge.textContent = '\u672a\u8fde\u63a5';
         badge.style.background = '#4a1a1a';
         badge.style.color = '#ff6b6b';
       }
@@ -862,24 +1023,20 @@
       });
       await apiPost('/config/batch', updates);
       await apiPost('/config/reload');
-      toast('配置已保存并热加载！');
+      toast('\u914d\u7f6e\u5df2\u4fdd\u5b58\u5e76\u70ed\u52a0\u8f7d\uff01');
       loadConfig();
     });
 
     document.getElementById('cfg-reset').addEventListener('click', async () => {
-      if (!confirm('确定要重置所有配置为默认值吗？')) return;
+      if (!confirm('\u786e\u5b9a\u8981\u91cd\u7f6e\u6240\u6709\u914d\u7f6e\u4e3a\u9ed8\u8ba4\u503c\u5417\uff1f')) return;
       await apiPost('/config/reset');
-      toast('配置已重置');
+      toast('\u914d\u7f6e\u5df2\u91cd\u7f6e');
       loadConfig();
     });
 
-    // Load config when entering config page
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((m) => {
-        if (m.target.id === 'view-config' && m.target.classList.contains('active')) {
-          loadConfig();
-        }
-      });
+    const observer = new MutationObserver(() => {
+      const vc = document.getElementById('view-config');
+      if (vc && vc.classList.contains('active')) loadConfig();
     });
     observer.observe(document.getElementById('view-config'), { attributes: true, attributeFilter: ['class'] });
   </script>
