@@ -1,0 +1,19 @@
+[Unit]
+Description=Vibe Coding Agent
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/vibe-agent
+EnvironmentFile=/opt/vibe-agent/.env
+ExecStart=/opt/vibe-agent/vibe-agent
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

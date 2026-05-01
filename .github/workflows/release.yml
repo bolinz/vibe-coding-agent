@@ -1,0 +1,49 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+
+      - name: Build main binary
+        run: bun build src/index.ts --compile --outfile=vibe-agent
+
+      - name: Build Feishu sidecar
+        run: |
+          mkdir -p plugins/feishu
+          cd sidecars/feishu
+          GOOS=linux GOARCH=amd64 go build -o ../../plugins/feishu/sidecar .
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p config
+          cp config/vibe-agent.service config/
+          cat > README.md <<-EOF
+          vibe-agent ${GITHUB_REF_NAME}
+          https://github.com/bolinz/vibe-coding-agent
+          EOF
+          VERSION=${GITHUB_REF_NAME}
+          tar czf vibe-agent-${VERSION}-linux-x86_64.tar.gz \
+            vibe-agent \
+            plugins/ \
+            config/vibe-agent.service \
+            .env.example \
+            README.md
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: vibe-agent-*-linux-x86_64.tar.gz
+          generate_release_notes: true

@@ -4,7 +4,7 @@ import type { SessionManager } from '../../core/session';
 import { SidecarRPC } from '../../core/sidecar-rpc';
 import { FeishuCardBuilder } from './card-builder';
 import { FeishuMenuStateManager } from './menu-state';
-import { findSidecarBinary } from './binary';
+import { findSidecarBinary } from '../../plugins/sidecar-loader';
 
 interface FeishuConfig {
   appId: string;
@@ -55,7 +55,7 @@ export class SidecarFeishuChannel implements Channel {
       return;
     }
 
-    const sidecarPath = findSidecarBinary();
+    const sidecarPath = findSidecarBinary('feishu');
     if (!sidecarPath) {
       console.error('[FeishuSidecar] feishu-sidecar binary not found');
       return;
