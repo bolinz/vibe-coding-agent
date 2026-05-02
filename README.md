@@ -29,6 +29,7 @@
 | **运行时** | Bun 1.3+ | 性能最佳、内置 TS 支持、单 binary |
 | **语言** | TypeScript | AI 生成友好、类型安全 |
 | **前端框架** | Preact + TSX | 3KB, React API, Bun 编译 |
+| **图标库** | lucide-preact | 线条 SVG 图标, tree-shakeable |
 | **Web 框架** | Hono | 轻量、快速、类型安全 |
 | **会话存储** | Memory / Redis | 开发用 Memory，生产可切换 Redis |
 | **配置存储** | SQLite (bun:sqlite) | 零配置，持久化，XOR 加密 |
@@ -276,3 +277,4 @@ bun run start         # 生产运行
 | 文档 | 内容 |
 |------|------|
 | `docs/00-architecture.md` | 完整架构设计 |
+| `docs/01-ui-design.md` | UI 设计文档 (现代极简风格) |

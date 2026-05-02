@@ -170,7 +170,21 @@ src/web/ui/
 
 ---
 
-## 7. 响应式断点
+## 7. CSS 导入链
+
+```
+chat.css  ──@import──→ variables.css
+               └──→ base.css
+
+config.css ──@import──→ variables.css
+               └──→ base.css
+```
+
+`chat.css` 和 `config.css` 各自独立加载，通过 `@import` 拉取共享的 `variables.css`（色板/布局/字体）和 `base.css`（reset/通用表单样式）。HTML 入口仅加载页面自身的入口 CSS。
+
+---
+
+## 8. 响应式断点
 
 | 断点 | 行为 |
 |------|------|
