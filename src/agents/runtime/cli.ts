@@ -58,20 +58,45 @@ export class CLIRuntime implements RuntimeAdapter {
       const args = (agent.config.args ?? []).map((arg) =>
         arg === '{message}' ? message : arg
       );
-      // If no placeholder was used, append message at the end (default behavior)
       const hasPlaceholder = (agent.config.args ?? []).includes('{message}');
-      const cmd = hasPlaceholder
-        ? [agent.config.command, ...args]
-        : [agent.config.command, ...args, message];
 
-      // Ensure common user bin paths in PATH for agents installed via npm/pip
       const extraPath = [`${process.env.HOME}/.local/bin`, `${process.env.HOME}/.bun/bin`].filter(Boolean).join(':');
       const envPath = process.env.PATH ? `${extraPath}:${process.env.PATH}` : extraPath;
+      const agentEnv = { ...process.env, PATH: envPath, ...(agent.config.env ?? {}) };
+
+      // Resolve command to absolute path via PATH lookup
+      let commandPath = agent.config.command;
+      for (const dir of envPath.split(':')) {
+        try { require('fs').accessSync(`${dir}/${agent.config.command}`); commandPath = `${dir}/${agent.config.command}`; break; } catch {}
+      }
+
+      // For Node.js shebang scripts, use node directly
+      let execCmd: string[];
+      try {
+        const header = require('fs').readFileSync(commandPath, 'utf8').slice(0, 50);
+        if (header.includes('node')) {
+          let nodePath = 'node';
+          for (const dir of envPath.split(':')) {
+            try { require('fs').accessSync(`${dir}/node`); nodePath = `${dir}/node`; break; } catch {}
+          }
+          execCmd = hasPlaceholder
+            ? [nodePath, commandPath, ...args]
+            : [nodePath, commandPath, ...args, message];
+        } else {
+          execCmd = hasPlaceholder ? [commandPath, ...args] : [commandPath, ...args, message];
+        }
+      } catch {
+        execCmd = hasPlaceholder ? [commandPath, ...args] : [commandPath, ...args, message];
+      }
+
+      // Validate cwd exists, fall back to HOME or /tmp
+      let resolvedCwd = workingDir ?? agent.config.cwd;
+      try { require('fs').accessSync(resolvedCwd); } catch { resolvedCwd = process.env.HOME || '/tmp'; }
 
       const proc = spawn({
-        cmd,
-        env: { ...process.env, PATH: envPath, ...(agent.config.env ?? {}) },
-        cwd: workingDir ?? agent.config.cwd,
+        cmd: execCmd,
+        env: agentEnv,
+        cwd: resolvedCwd,
         stdout: 'pipe',
         stderr: 'pipe',
         signal: controller.signal,
