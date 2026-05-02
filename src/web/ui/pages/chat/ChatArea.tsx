@@ -7,9 +7,10 @@ import { MessageList } from './MessageList';
 interface Props {
   messages: MessageData[];
   typingText: string | null;
+  onCreateSession: () => Promise<void>;
 }
 
-export function ChatArea({ messages, typingText }: Props) {
+export function ChatArea({ messages, typingText, onCreateSession }: Props) {
   const [nearBottom, setNearBottom] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -32,7 +33,7 @@ export function ChatArea({ messages, typingText }: Props) {
   return (
     <div ref={containerRef} style="flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;">
       <div class="chat-container" onScroll={handleScroll}>
-        <MessageList messages={messages} typingText={typingText} />
+        <MessageList messages={messages} typingText={typingText} onCreateSession={onCreateSession} />
       </div>
       <button
         id="scrollBottomBtn"

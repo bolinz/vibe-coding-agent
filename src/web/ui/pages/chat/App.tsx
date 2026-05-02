@@ -205,6 +205,7 @@ function ChatApp() {
           <ChatArea
             messages={messages}
             typingText={typingText}
+            onCreateSession={createNewSession}
           />
           <InputBar
             onSend={sendMessage}
