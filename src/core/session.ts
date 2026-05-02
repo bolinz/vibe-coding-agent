@@ -9,8 +9,17 @@ export class SessionManager {
   }
 
   async listByUserId(userId: string): Promise<Session[]> {
-    const all = Array.from(this.sessions.values());
-    return all.filter((s) => s.userId === userId);
+    const cached = Array.from(this.sessions.values()).filter((s) => s.userId === userId);
+    if (cached.length > 0) return cached;
+
+    if (this.store.listByUserId) {
+      const stored = await this.store.listByUserId(userId);
+      for (const s of stored) {
+        this.sessions.set(s.id, s);
+      }
+      return stored;
+    }
+    return [];
   }
 
   async listAll(): Promise<Session[]> {
@@ -52,6 +61,15 @@ export class SessionManager {
     for (const session of this.sessions.values()) {
       if (session.userId === userId && session.state === 'active') {
         return session;
+      }
+    }
+    // Fall back to store
+    if (this.store.listByUserId) {
+      const sessions = await this.store.listByUserId(userId);
+      const active = sessions.find((s) => s.state === 'active');
+      if (active) {
+        this.sessions.set(active.id, active);
+        return active;
       }
     }
     return null;

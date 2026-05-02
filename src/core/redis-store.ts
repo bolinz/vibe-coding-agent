@@ -14,7 +14,6 @@ export class RedisSessionStore implements SessionStore {
     const key = this.keyPrefix + session.id;
     const data = JSON.stringify({
       ...session,
-      // Serialize Date objects
       createdAt: session.createdAt.toISOString(),
       updatedAt: session.updatedAt.toISOString(),
       messages: session.messages.map(m => ({
@@ -46,6 +45,36 @@ export class RedisSessionStore implements SessionStore {
     } catch {
       return null;
     }
+  }
+
+  async listByUserId(userId: string): Promise<Session[]> {
+    const sessions: Session[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', `${this.keyPrefix}*`, 'COUNT', '100');
+      cursor = nextCursor;
+      if (keys.length > 0) {
+        const data = await this.redis.mget(...keys);
+        for (const d of data) {
+          if (!d) continue;
+          try {
+            const parsed = JSON.parse(d);
+            if (parsed.userId === userId) {
+              sessions.push({
+                ...parsed,
+                createdAt: new Date(parsed.createdAt),
+                updatedAt: new Date(parsed.updatedAt),
+                messages: parsed.messages.map((m: Record<string, unknown>) => ({
+                  ...m,
+                  timestamp: new Date(m.timestamp as string)
+                }))
+              });
+            }
+          } catch {}
+        }
+      }
+    } while (cursor !== '0');
+    return sessions;
   }
 
   async delete(sessionId: string): Promise<void> {
