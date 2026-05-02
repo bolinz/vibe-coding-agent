@@ -206,7 +206,20 @@ export class FeishuCardBuilder {
       return {
         config: { wide_screen_mode: true },
         header: { title: { tag: 'plain_text', content: 'ℹ️ 会话信息' }, template: 'blue' },
-        elements: [{ tag: 'div', text: { tag: 'lark_md', content: '当前没有活跃会话' } }],
+        elements: [
+          { tag: 'div', text: { tag: 'lark_md', content: '当前没有活跃会话' } },
+          {
+            tag: 'action',
+            actions: [
+              {
+                tag: 'button',
+                text: { tag: 'plain_text', content: '🔙 返回' },
+                type: 'default',
+                value: { action: 'back_to_menu' },
+              },
+            ],
+          },
+        ],
       };
     }
     return {
