@@ -100,6 +100,37 @@ export class WebServer {
       }
     });
 
+    // Config page
+    this.app.get('/config', (c) => {
+      try {
+        const htmlPath = join(process.cwd(), 'src/web/ui/config.html');
+        const html = readFileSync(htmlPath, 'utf-8');
+        c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        return c.html(html);
+      } catch {
+        return c.html('<h1>配置页面</h1><p>UI not found</p>');
+      }
+    });
+
+    // Static UI assets (compiled JS + CSS)
+    this.app.get('/ui/*', async (c) => {
+      try {
+        const filePath = join(process.cwd(), 'dist', c.req.path);
+        const file = Bun.file(filePath);
+        const exists = await file.exists();
+        if (!exists) return c.json({ error: 'Not found' }, 404);
+        const ext = filePath.split('.').pop();
+        const mime: Record<string, string> = {
+          js: 'application/javascript',
+          css: 'text/css',
+          html: 'text/html',
+        };
+        return new Response(file, { headers: { 'Content-Type': mime[ext || ''] || 'application/octet-stream' } });
+      } catch {
+        return c.json({ error: 'Not found' }, 404);
+      }
+    });
+
     // API routes
     const api = new Hono();
 

@@ -1,0 +1,51 @@
+:root {
+  --bg-app:          #0b0b1a;
+  --bg-surface:      #12122a;
+  --bg-elevated:     #1a1a3e;
+  --bg-hover:        rgba(0,217,255,0.04);
+  --bg-input:        #0a0a1e;
+
+  --border-subtle:   rgba(15,52,96,0.35);
+  --border-default:  rgba(15,52,96,0.6);
+  --border-accent:   rgba(0,217,255,0.3);
+
+  --text-primary:    #e8e8f0;
+  --text-secondary:  #9999bb;
+  --text-muted:      #666688;
+  --text-accent:     #61e8ff;
+
+  --accent:          #00d9ff;
+  --accent-glow:     rgba(0,217,255,0.2);
+  --accent-dim:      rgba(0,217,255,0.08);
+  --success:         #34d399;
+  --warning:         #fbbf24;
+  --danger:          #f87171;
+
+  --sidebar-w:       280px;
+  --header-h:        52px;
+  --input-bar-h:     64px;
+  --radius-sm:       6px;
+  --radius-md:       12px;
+  --radius-lg:       20px;
+
+  --shadow-sm:       0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:       0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg:       0 8px 32px rgba(0,0,0,0.6);
+
+  --font:            'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono:       'JetBrains Mono', 'Fira Code', monospace;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --sidebar-w: 0px;
+    --header-h: 48px;
+    --input-bar-h: 56px;
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --header-h: 44px;
+  }
+}
