@@ -38,6 +38,7 @@ export interface Session {
   messages: UnifiedMessage[];
   context: SessionContext;
   state: SessionState;
+  pinned?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

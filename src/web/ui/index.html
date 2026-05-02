@@ -142,6 +142,21 @@
       color: #666;
       margin-top: 0.1rem;
     }
+    .session-item.pinned { border-left-color: #ffc107; }
+    .session-item .session-pin {
+      position: absolute;
+      bottom: 0.3rem;
+      right: 0.3rem;
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 0.7rem;
+      padding: 0.1rem 0.2rem;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+    .session-item:hover .session-pin { opacity: 0.6; }
+    .session-item .session-pin:hover { opacity: 1; }
     .session-item .session-agent {
       font-size: 0.6rem;
       margin-top: 0.2rem;
@@ -661,20 +676,25 @@
       const list = document.getElementById('sessionList');
       if (!list) return;
       loadSessions().then(sessions => {
+        sessions.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
         list.innerHTML = sessions.map(s => {
           const active = s.id === currentSessionId ? 'active' : '';
-          return '<div class="session-item ' + active + '" data-id="' + s.id + '">' +
+          const pinned = s.pinned ? 'pinned' : '';
+          return '<div class="session-item ' + active + ' ' + pinned + '" data-id="' + s.id + '">' +
             '<button class="session-del" data-id="' + s.id + '" title="关闭会话">\u00d7</button>' +
-            '<div class="session-name">' + s.agentType + ' ' + s.id.slice(0, 8) + '</div>' +
-            '<div class="session-meta">' + s.messageCount + ' 条消息 · ' + formatTime(s.createdAt) + '</div>' +
-            '<select class="session-agent" data-session="' + s.id + '" title="切换 Agent">' +
+            '<div class="session-name">' + (s.pinned ? '\ud83d\udccc ' : '') + s.agentType + ' ' + s.id.slice(0, 8) + '</div>' +
+            '<div class="session-meta">' + s.messageCount + ' 条消息 \u00b7 ' + formatTime(s.createdAt) + '</div>' +
+            '<select class="session-agent" data-session="' + s.id + '" title="\u5207\u6362 Agent">' +
             AGENTS.map(a => '<option value="' + a + '"' + (a === s.agentType ? ' selected' : '') + '>' + a + '</option>').join('') +
-            '</select></div>';
+            '</select>' +
+            '<button class="session-pin" data-id="' + s.id + '" data-pinned="' + (s.pinned ? '1' : '0') + '" title="' + (s.pinned ? '\u53d6\u6d88\u4fdd\u5b58' : '\u6c38\u4e45\u4fdd\u5b58') + '">' + (s.pinned ? '\ud83d\udccc' : '\ud83d\udccd') + '</button>' +
+            '</div>';
         }).join('');
 
         list.querySelectorAll('.session-item').forEach(el => {
           el.addEventListener('click', (e) => {
             if (e.target.classList.contains('session-del')) return;
+            if (e.target.classList.contains('session-pin')) return;
             switchSession(el.dataset.id);
           });
         });
@@ -682,7 +702,7 @@
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const id = btn.dataset.id;
-            if (!confirm('确定关闭此会话？')) return;
+            if (!confirm('\u786e\u5b9a\u5173\u95ed\u6b64\u4f1a\u8bdd\uff1f')) return;
             await apiDelete('/sessions/' + id);
             if (id === currentSessionId) {
               currentSessionId = null;
@@ -703,7 +723,21 @@
             const agent = sel.value;
             await apiPost('/sessions/' + sessionId + '/switch-agent', { agentType: agent });
             renderSessionList();
-            toast('已切换至 ' + agent);
+            toast('\u5df2\u5207\u6362\u81f3 ' + agent);
+          });
+        });
+        list.querySelectorAll('.session-pin').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            const pinned = btn.dataset.pinned === '1';
+            if (pinned) {
+              await apiPost('/sessions/' + id + '/unpin');
+            } else {
+              await apiPost('/sessions/' + id + '/pin');
+            }
+            renderSessionList();
+            toast(pinned ? '\u5df2\u53d6\u6d88\u4fdd\u5b58' : '\u5df2\u6c38\u4e45\u4fdd\u5b58');
           });
         });
         });

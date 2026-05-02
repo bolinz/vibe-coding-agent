@@ -308,7 +308,7 @@ export class SidecarFeishuChannel implements Channel {
         const current = await this.sessionManager.getByUserId(userId);
         return {
           card: this.cardBuilder.buildSessionListCard(
-            sessions.map((s) => ({ id: s.id, agentType: s.agentType, messageCount: s.messages.length })),
+            sessions.map((s) => ({ id: s.id, agentType: s.agentType, messageCount: s.messages.length, pinned: s.pinned })),
             current?.id,
           ),
           toast: { type: 'info', content: '请选择会话' },
@@ -343,6 +343,28 @@ export class SidecarFeishuChannel implements Channel {
         return {
           card: this.cardBuilder.buildInfoCard(session),
           toast: { type: 'info', content: '会话信息' },
+        };
+      }
+
+      case 'pin_session': {
+        const pinSession = await this.sessionManager.getByUserId(userId);
+        if (pinSession) {
+          await this.sessionManager.pin(pinSession.id);
+        }
+        return {
+          card: this.cardBuilder.buildInfoCard(pinSession),
+          toast: { type: 'success', content: '已永久保存' },
+        };
+      }
+
+      case 'unpin_session': {
+        const unpinSession = await this.sessionManager.getByUserId(userId);
+        if (unpinSession) {
+          await this.sessionManager.unpin(unpinSession.id);
+        }
+        return {
+          card: this.cardBuilder.buildInfoCard(unpinSession),
+          toast: { type: 'info', content: '已取消保存' },
         };
       }
 

@@ -22,7 +22,11 @@ export class RedisSessionStore implements SessionStore {
       }))
     });
 
-    await this.redis.set(key, data, 'EX', 7 * 24 * 60 * 60); // 7 days TTL
+    if (session.pinned) {
+      await this.redis.set(key, data);
+    } else {
+      await this.redis.set(key, data, 'EX', 7 * 24 * 60 * 60); // 7 days TTL
+    }
   }
 
   async load(sessionId: string): Promise<Session | null> {

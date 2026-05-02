@@ -109,6 +109,22 @@ export class SessionManager {
     await this.store.delete(sessionId);
     this.sessions.delete(sessionId);
   }
+
+  async pin(sessionId: string): Promise<Session> {
+    const session = await this.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    session.pinned = true;
+    await this.update(session);
+    return session;
+  }
+
+  async unpin(sessionId: string): Promise<Session> {
+    const session = await this.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    session.pinned = false;
+    await this.update(session);
+    return session;
+  }
 }
 
 // Session store interface (Redis implementation)

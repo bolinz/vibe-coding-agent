@@ -110,6 +110,7 @@ export class WebServer {
         userId: s.userId,
         agentType: s.agentType,
         state: s.state,
+        pinned: s.pinned ?? false,
         messageCount: s.messages.length,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
@@ -126,6 +127,7 @@ export class WebServer {
         userId: session.userId,
         agentType: session.agentType,
         state: session.state,
+        pinned: session.pinned ?? false,
         context: session.context,
         messages: session.messages.map((m) => ({
           role: m.role,
@@ -155,6 +157,18 @@ export class WebServer {
       const id = c.req.param('id');
       await this.sessionManager.close(id);
       return c.json({ success: true });
+    });
+
+    api.post('/sessions/:id/pin', async (c) => {
+      const id = c.req.param('id');
+      const session = await this.sessionManager.pin(id);
+      return c.json({ id: session.id, pinned: true });
+    });
+
+    api.post('/sessions/:id/unpin', async (c) => {
+      const id = c.req.param('id');
+      const session = await this.sessionManager.unpin(id);
+      return c.json({ id: session.id, pinned: false });
     });
 
     api.post('/sessions/:id/switch-agent', async (c) => {

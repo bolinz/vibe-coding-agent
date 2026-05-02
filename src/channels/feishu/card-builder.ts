@@ -163,10 +163,10 @@ export class FeishuCardBuilder {
     };
   }
 
-  buildSessionListCard(sessions: Array<{ id: string; agentType: string; messageCount: number }>, currentSessionId?: string): Record<string, unknown> {
+  buildSessionListCard(sessions: Array<{ id: string; agentType: string; messageCount: number; pinned?: boolean }>, currentSessionId?: string): Record<string, unknown> {
     const actions = sessions.map((s) => ({
       tag: 'button',
-      text: { tag: 'plain_text', content: `${s.id === currentSessionId ? '✅ ' : ''}${s.agentType} (${s.messageCount}条)` },
+      text: { tag: 'plain_text', content: `${s.id === currentSessionId ? '✅ ' : ''}${s.pinned ? '📌 ' : ''}${s.agentType} (${s.messageCount}条)` },
       type: s.id === currentSessionId ? 'primary' : 'default',
       value: { action: 'set_session', sessionId: s.id },
     }));
@@ -220,14 +220,20 @@ export class FeishuCardBuilder {
             content:
               `**Session ID:** ${session.id}\n` +
               `**Agent:** ${session.agentType}\n` +
+              `**状态:** ${session.pinned ? '📌 已保存' : session.state}\n` +
               `**消息数:** ${session.messages.length}\n` +
-              `**状态:** ${session.state}\n` +
               `**创建时间:** ${session.createdAt.toLocaleString()}`,
           },
         },
         {
           tag: 'action',
           actions: [
+            {
+              tag: 'button',
+              text: { tag: 'plain_text', content: session.pinned ? '📌 取消保存' : '📌 永久保存' },
+              type: session.pinned ? 'default' : 'primary',
+              value: { action: session.pinned ? 'unpin_session' : 'pin_session' },
+            },
             {
               tag: 'button',
               text: { tag: 'plain_text', content: '🔙 返回' },
