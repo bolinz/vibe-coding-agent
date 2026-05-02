@@ -110,19 +110,16 @@ export class SidecarFeishuChannel implements Channel {
   }
 
   private subscribeEvents(): void {
-    this.unsubscribeEvent = this.eventBus.subscribeSession('*', (event) => {
-      if (event.type === 'agent.thinking') {
-        this.handleThinking(event.sessionId, (event.data as any)?.content);
-      } else if (event.type === 'agent.tool_executing') {
-        this.handleToolExecuting(event.sessionId, (event.data as any)?.toolName);
-      } else if (event.type === 'agent.response') {
-        this.handleResponse(event.sessionId, (event.data as any)?.content);
-      } else if (event.type === 'agent.error') {
-        this.handleError(event.sessionId, (event.data as any)?.error);
-      } else if (event.type === 'agent.stream_chunk') {
-        // Feishu doesn't support streaming, ignore
-      }
+    const unsub1 = this.eventBus.subscribe('agent.thinking', (event) => {
+      this.handleThinking(event.sessionId, (event.data as any)?.content);
     });
+    const unsub2 = this.eventBus.subscribe('agent.tool_executing', (event) => {
+      this.handleToolExecuting(event.sessionId, (event.data as any)?.toolName);
+    });
+    const unsub3 = this.eventBus.subscribe('agent.error', (event) => {
+      this.handleError(event.sessionId, (event.data as any)?.error);
+    });
+    this.unsubscribeEvent = () => { unsub1(); unsub2(); unsub3(); };
   }
 
   private async handleThinking(userId: string, _userMessage: string): Promise<void> {
