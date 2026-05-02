@@ -18,6 +18,14 @@ import { PipelineEngine } from './agents/pipeline/executor';
 import { ShellTool } from './tools/shell';
 import { GitTool } from './tools/git';
 import { FileTool } from './tools/file';
+import * as path from 'path';
+import * as os from 'os';
+
+// Ensure common bin directories are in PATH for spawned subprocesses
+const userBinDir = path.join(os.homedir(), '.local/bin');
+if (!(process.env.PATH ?? '').includes(userBinDir)) {
+  process.env.PATH = `${userBinDir}:${process.env.PATH}`;
+}
 
 const configManager = new ConfigManager();
 configManager.reloadEnvFromDb();
