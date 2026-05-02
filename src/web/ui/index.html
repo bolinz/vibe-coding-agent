@@ -540,6 +540,7 @@
         <label>默认 Agent</label>
         <select id="wc-default-agent">
           <option value="echo">Echo（测试模式）</option>
+          <option value="opencode">OpenCode（通用编码）</option>
           <option value="hermes">Hermes（本地推理）</option>
           <option value="claude">Claude（Anthropic）</option>
           <option value="aider">Aider（编码助手）</option>
@@ -765,7 +766,7 @@
     let useSSE = true;
     let refreshingList = false;
     let cancelBtn = null;
-    const AGENTS = ['echo', 'hermes', 'claude', 'codex', 'cline', 'aider'];
+    const AGENTS = ['echo', 'opencode', 'hermes', 'claude', 'codex', 'cline', 'aider'];
 
     function updateConnStatus() {
       const dot = document.getElementById('connStatus');

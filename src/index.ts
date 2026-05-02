@@ -77,6 +77,7 @@ async function main() {
   agentManager.register({ name: 'cline', description: 'Cline CLI', runtimeType: 'cli', config: { command: 'cline', args: ['--execute'] }, capabilities: { streaming: true, multiTurn: false } });
   agentManager.register({ name: 'hermes', description: 'Hermes CLI (AI assistant with tool-calling)', runtimeType: 'cli', config: { command: 'hermes', args: ['chat', '-q', '{message}', '-Q'] }, capabilities: { streaming: true, multiTurn: true } });
   agentManager.register({ name: 'aider', description: 'Aider coding assistant in tmux session', runtimeType: 'session', config: { command: 'aider', env: { OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? '', OPENAI_API_BASE: process.env.OPENAI_API_BASE ?? 'https://api.minimax.chat/v1' } }, capabilities: { streaming: true, multiTurn: true } });
+  agentManager.register({ name: 'opencode', description: 'OpenCode AI coding agent', runtimeType: 'cli', config: { command: 'opencode', args: ['run', '{message}'] }, capabilities: { streaming: true, multiTurn: true } });
   agentManager.register({ name: 'echo', description: 'Simple echo agent for testing', runtimeType: 'cli', config: { command: 'echo', args: ['Echo:'] }, capabilities: { streaming: false, multiTurn: false } });
   console.log('[Agent] Agents registered:', agentManager.listNames());
 
