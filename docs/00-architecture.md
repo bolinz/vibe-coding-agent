@@ -7,16 +7,19 @@
 ## 1. 设计目标
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         设计目标                                  │
-├─────────────────────────────────────────────────────────────────┤
-│  1. 多渠道接入: 飞书 (Sidecar)、WebSocket、SSH                 │
-│  2. 共享 Session: 多渠道共享同一会话上下文                       │
-│  3. Agent 无关: 纯声明式配置，无自定义执行类                    │
-│  4. 通用 Runtime: CLI (一次性进程) / tmux (持久会话)           │
-│  5. Pipeline 编排: 多轮 Tool Calling + 流式 StreamChunk        │
-│  6. 部署简单: Bun 单 binary + Go Sidecar                       │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                         设计目标                               │
+├──────────────────────────────────────────────────────────────┤
+│  1. 多渠道接入: 飞书 (Sidecar)、Web UI、SSH、Webhook、      │
+│     GitHub、MCP                                              │
+│  2. 共享 Session: 多渠道共享同一会话上下文                    │
+│  3. Agent 无关: 纯声明式配置，无自定义执行类                   │
+│  4. 通用 Runtime: CLI (一次性进程) / tmux (持久会话) /        │
+│     Container (Docker/Podman 隔离)                           │
+│  5. Pipeline 编排: 多轮 Tool Calling + 流式 StreamChunk      │
+│  6. 会话工作目录: 每 session 独立配置 + 热切换                 │
+│  7. 部署简单: Bun 单 binary + Go Sidecar                      │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -24,104 +27,76 @@
 ## 2. 核心架构
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              用户层 (多渠道)                                │
-│                                                                         │
-│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐               │
-│   │   飞书      │   │   Web      │   │   SSH      │               │
-│   │   Bot       │   │   UI       │   │   终端     │               │
-│   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘               │
-└──────────┼────────────────┼────────────────┼──────────────────────────────┘
-           │                │                │
-           ▼                ▼                ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          渠道层 (Channels)                               │
-│                                                                         │
-│   ┌──────────────────────────────────────────────────────────────┐    │
-│   │                   BaseChannel (abstract)                      │    │
-│   │   ┌────────────┐ ┌────────────┐ ┌──────────┐ ┌───────────┐ │    │
-│   │   │ Sidecar    │ │ WebSocket  │ │  SSH     │ │ Feishu   │ │    │
-│   │   │ Feishu     │ │ Channel    │ │  Channel │ │ (depr.)  │ │    │
-│   │   │ (Go stdio) │ │ (Bun WS)   │ │ (tmux)   │ │(SDK WS)  │ │    │
-│   │   └────────────┘ └────────────┘ └──────────┘ └───────────┘ │    │
-│   │                                                             │    │
-│   │   Channel Interface: connect / disconnect / send /          │    │
-│   │   handleMessage → UnifiedMessage {channel, sessionId, ...} │    │
-│   └──────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          核心层 (Core)                                   │
-│                                                                         │
-│   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
-│   │   Session        │  │    Router        │  │    EventBus      │   │
-│   │   Manager        │  │                  │  │    (Pub/Sub)     │   │
-│   │                  │  │  route(msg) →    │  │                  │   │
-│   │  MemoryStore     │  │    session       │  │  agent.thinking  │   │
-│   │  RedisStore      │  │    + pipeline    │  │  agent.response  │   │
-│   │  SQLite 持久化   │  │  executeStream() │  │  agent.error     │   │
-│   └──────────────────┘  └──────────────────┘  └──────────────────┘   │
-│                                                                         │
-│   ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
-│   │   ConfigManager  │  │   SidecarRPC     │  │   ToolRegistry   │   │
-│   │                  │  │                  │  │                  │   │
-│   │  SQLite 存储     │  │  JSON-RPC 2.0    │  │  shell / git     │   │
-│   │  env 覆盖        │  │  stdin/stdout    │  │  / file          │   │
-│   │  XOR 加密        │  │  method 注册     │  │                  │   │
-│   └──────────────────┘  └──────────────────┘  └──────────────────┘   │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        Agent 层 — Pipeline 编排                          │
-│                                                                         │
-│   ┌──────────────────────────────────────────────────────────────┐    │
-│   │                   AgentManager (config registry)               │    │
-│   │   ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌────────────────┐ │    │
-│   │   │ claude   │ │ hermes   │ │ aider    │ │ echo (test)    │ │    │
-│   │   │ CLI cfg  │ │ CLI cfg  │ │ session  │ │ CLI cfg        │ │    │
-│   │   └──────────┘ └──────────┘ └──────────┘ └────────────────┘ │    │
-│   └──────────────────────────────────────────────────────────────┘    │
-│                              |                                         │
-│                              ▼                                         │
-│   ┌──────────────────────────────────────────────────────────────┐    │
-│   │              PipelineEngine + ToolLoop                        │    │
-│   │                                                             │    │
-│   │   StreamChunk{text | tool_call | tool_result | error | done} │    │
-│   │                                                             │    │
-│   │   executeStream(name, sessionId, message) → AsyncGenerator   │    │
-│   │     → 1. getRuntime(name) → CLIRuntime / SessionRuntime      │    │
-│   │     → 2. spawn process (bun spawn / tmux send-keys)         │    │
-│   │     → 3. read stdout → StreamChunk.text                     │    │
-│   │     → 4. ToolLoop: detect tool calls → execute → repeat     │    │
-│   └──────────────────────────────────────────────────────────────┘    │
-│                              |                                         │
-│                              ▼                                         │
-│   ┌──────────────────────────────────────────────────────────────┐    │
-│   │               RuntimeRegistry                                │    │
-│   │                                                             │    │
-│   │   CLIRuntime (一次性进程)                                    │    │
-│   │     ├ bun spawn → stdout + stderr → stream                  │    │
-│   │     ├ 支持 {message} 占位符注入                              │    │
-│   │     └ cancel via process.kill                                │    │
-│   │                                                             │    │
-│   │   SessionRuntime (tmux 持久会话)                             │    │
-│   │     ├ tmux new-session / send-keys / capture-pane            │    │
-│   │     ├ 防注入: send-keys 转义                                 │    │
-│   │     └ cleanup: 超时/手动关闭                                 │    │
-│   └──────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────┬───────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          工具层 (Tools)                                 │
-│                                                                         │
-│   ┌───────────┐  ┌───────────┐  ┌───────────┐                       │
-│   │   Shell   │  │    Git    │  │   File    │                       │
-│   │   Tool    │  │   Tool    │  │   Tool    │                       │
-│   └───────────┘  └───────────┘  └───────────┘                       │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│                              用户层 (多渠道)                               │
+│                                                                          │
+│  飞书 Bot    Web UI      SSH     Webhook    GitHub    MCP Client         │
+│   (Sidecar)   (SSE+WS)           (POST)     (Webhook) (SSE Transport)   │
+└──────┬──────────┬──────────┬──────────┬──────────┬──────────┘
+       │          │          │          │          │
+       └──────────┼──────────┼──────────┼──────────┘
+                  ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          渠道层 (Channels)                                │
+│                                                                          │
+│  ChannelManager                                                          │
+│  ├── registerFactory(factory) — 开放 string 类型，无封闭联合              │
+│  ├── enable(type, config)    — create → connect                          │
+│  ├── get<T>(type) → Channel                                              │
+│  └── broadcast(sessionId, message) — 按 capability 分发                   │
+│                                                                          │
+│  Channel Interface: connect / disconnect / send / handleEvent            │
+│  Channel type: 'feishu' | 'websocket' | 'ssh' | 'webhook' | 'github' | 'mcp'
+└──────────────────────────┬───────────────────────────────────────────────┘
+                           │
+                           ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          核心层 (Core)                                    │
+│                                                                          │
+│  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐                │
+│  │ Session      │   │   Router     │   │  EventBus    │                │
+│  │ Manager      │   │              │   │  (Pub/Sub)   │                │
+│  │              │   │ route(msg) → │   │              │                │
+│  │ MemoryStore  │   │  session     │   │ agent.think  │                │
+│  │ RedisStore   │   │  + pipeline  │   │ agent.resp   │                │
+│  │ SQLite 持久化 │   │  executeStr()│   │ agent.error  │                │
+│  └──────────────┘   └──────┬───────┘   └──────────────┘                │
+│                            │                                            │
+│  ┌──────────────┐   ┌──────┴───────┐   ┌──────────────┐                │
+│  │ SessionBind  │   │ PipelineEng  │   │ ToolRegistry │                │
+│  │ Store        │   │ + ToolLoop   │   │ shell/git/   │                │
+│  │ (ch,uid)→sid │   │              │   │ file         │                │
+│  └──────────────┘   └──────┬───────┘   └──────────────┘                │
+└────────────────────────────┼────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                        Agent 层 — Runtime 层                             │
+│                                                                          │
+│  AgentManager (name → Agent 声明式配置)                                   │
+│    ├── hermes  (cli)      hermes chat -q {message} -Q                    │
+│    ├── claude  (cli)      claude -p {message}                            │
+│    ├── aider   (session)  tmux: send-keys + capture-pane                 │
+│    └── echo    (cli)      echo Echo: {message} (测试)                     │
+│                        + optional container: { image: '...' }            │
+│                                                                          │
+│  RuntimeRegistry                                                         │
+│    ├── CLIRuntime        bun.spawn → stdout → StreamChunk               │
+│    ├── SessionRuntime    tmux send-keys + capture-pane → StreamChunk    │
+│    └── ContainerRuntime  docker/podman run --rm -i → stdout → StreamChunk│
+│                                                                          │
+│  工作目录传递链:                                                          │
+│  session.context.workingDir → Router → PipelineEngine → runtime.start()  │
+│    ├── CLIRuntime:       bun.spawn({ cwd: workingDir })                  │
+│    ├── SessionRuntime:   tmux cd <workingDir> && ...                     │
+│    └── ContainerRuntime: docker -v <hostDir>:<containerDir> -w <...>     │
+└──────────────────────────────────────────────────────────────────────────┘
+                             │
+                             ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          工具层 (Tools)                                  │
+│                    Shell ◄──► Git ◄──► File                             │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -132,75 +107,79 @@
 agent-framework/
 ├── src/
 │   ├── core/                   # 核心模块
-│   │   ├── session.ts         # 会话管理 (Memory/Redis)
+│   │   ├── session.ts         # SessionManager + SessionBindingStore
+│   │   ├── session-binding.ts # (channel, userId) → sessionId 映射
 │   │   ├── router.ts          # 消息路由 → PipelineEngine
-│   │   ├── registry.ts        # ToolRegistry 仅 (AgentRegistry 已删除)
-│   │   ├── event.ts           # 事件总线 (Pub/Sub)
-│   │   ├── types.ts           # Channel/UnifiedMessage/Session 类型
+│   │   ├── event.ts           # 事件总线 (Pub/Sub + subscribeSession)
+│   │   ├── types.ts           # Session / UnifiedMessage / Tool 类型
 │   │   ├── config.ts          # SQLite ConfigManager + XOR 加密
+│   │   ├── registry.ts        # ToolRegistry
+│   │   ├── channel-manager.ts # ChannelManager (工厂 + 生命周期 + 广播)
 │   │   └── sidecar-rpc.ts     # JSON-RPC 2.0 over stdio
 │   │
-│   ├── channels/              # 渠道接入
-│   │   ├── types.ts          # Channel 接口 + 消息类型 + Factory 类型
-│   │   ├── channel-manager.ts# ChannelManager (统一生命周期 + 广播)
+│   ├── channels/              # 渠道层 (开放 string 类型)
+│   │   ├── types.ts           # Channel / ChannelFactory / ChannelDependencies
 │   │   ├── feishu/           # 飞书 Sidecar 实现
-│   │   │   ├── sidecar-channel.ts  # 精简版 Channel 实现
-│   │   │   ├── card-builder.ts     # 卡片构建 (提取共享)
-│   │   │   ├── menu-state.ts       # 菜单状态机 (提取共享)
-│   │   │   ├── binary.ts           # Sidecar 二进制查找
-│   │   │   └── factory.ts          # FeishuChannelFactory
-│   │   ├── websocket/
-│   │   │   ├── channel.ts    # WebSocketChannel
-│   │   │   └── factory.ts    # WebSocketChannelFactory
-│   │   ├── ssh/
-│   │   │   ├── channel.ts    # SSHChannel
-│   │   │   └── factory.ts    # SSHChannelFactory
-│   │   └── feishu-register.ts# 扫码注册飞书 Bot (独立工具)
+│   │   │   ├── sidecar-channel.ts  # 精简版 Channel
+│   │   │   ├── card-builder.ts     # 8 种卡片构建器
+│   │   │   ├── menu-state.ts       # 菜单状态机
+│   │   │   ├── factory.ts
+│   │   │   └── sidecar-loader.ts   # 二进制查找
+│   │   ├── websocket/         # Web UI (SSE + WS)
+│   │   │   ├── channel.ts
+│   │   │   └── factory.ts
+│   │   ├── ssh/               # SSH 终端
+│   │   │   ├── channel.ts
+│   │   │   └── factory.ts
+│   │   ├── webhook/           # 外部 Webhook API
+│   │   │   ├── channel.ts     # 同步/异步双模式
+│   │   │   └── factory.ts
+│   │   ├── github/            # GitHub App Webhook
+│   │   │   ├── auth.ts        # Token + App JWT 双认证
+│   │   │   ├── channel.ts     # issue_comment → agent → 回复
+│   │   │   └── factory.ts
+│   │   └── mcp/               # MCP Server
+│   │       ├── channel.ts     # McpServer + HonoSSETransport
+│   │       └── factory.ts
 │   │
-│   ├── agents/               # Agent 层 (声明式 + Pipeline)
-│   │   ├── manager.ts        # AgentManager — 注册/查询/删除
-│   │   ├── types.ts          # Agent 配置描述 + StreamChunk
+│   ├── agents/               # Agent 声明式 + Pipeline
+│   │   ├── manager.ts        # AgentManager
+│   │   ├── types.ts          # Agent / ContainerConfig / RuntimeType
 │   │   ├── runtime/
-│   │   │   ├── types.ts      # RuntimeAdapter 接口
+│   │   │   ├── types.ts      # RuntimeAdapter { start(sessionId, agent, workingDir?) }
 │   │   │   ├── registry.ts   # RuntimeRegistry
 │   │   │   ├── cli.ts        # CLIRuntime (bun spawn)
-│   │   │   └── session.ts    # SessionRuntime (tmux)
+│   │   │   ├── session.ts    # SessionRuntime (tmux)
+│   │   │   └── container.ts  # ContainerRuntime (docker/podman)
 │   │   └── pipeline/
-│   │       ├── executor.ts   # PipelineEngine — 编排执行
-│   │       └── tool-loop.ts  # ToolLoop — 多轮 tool calling
+│   │       ├── executor.ts   # PipelineEngine (自动检测容器配置)
+│   │       └── tool-loop.ts  # ToolLoop (多轮 tool calling)
 │   │
 │   ├── tools/                # 工具集
-│   │   ├── base.ts           # Tool 基类
-│   │   ├── shell.ts          # Shell 执行
-│   │   ├── git.ts            # Git 操作
-│   │   └── file.ts           # 文件操作
+│   │   ├── base.ts / shell.ts / git.ts / file.ts
 │   │
 │   ├── web/                  # Web 服务
-│   │   └── server.ts         # Hono + Bun.serve + SSE
+│   │   ├── server.ts         # Hono + Bun.serve + SSE
+│   │   └── ui/index.html     # 单页 Web UI
 │   │
 │   └── index.ts              # 入口: 组装所有组件
 │
 ├── sidecars/                 # Go Sidecar
 │   └── feishu/
-│       ├── main.go           # 入口: stdio JSON-RPC
-│       ├── rpc.go            # 双向 RPC 实现
-│       ├── feishu.go         # 飞书 WS + 卡片刷新
-│       ├── logger.go         # SDK 日志重定向
-│       └── Makefile          # 跨平台编译
+│       ├── main.go           # 入口
+│       ├── rpc.go            # 双向 RPC
+│       └── feishu.go         # 飞书 WS
 │
 ├── test/
-│   ├── integration/
-│   │   ├── sidecar-channel.test.ts
-│   │   └── sidecar-rpc.test.ts
-│   └── e2e/
-│       └── sidecar-card-refresh.ts
+│   └── integration/
+│       ├── sidecar-channel.test.ts
+│       ├── sidecar-rpc.test.ts
+│       └── channels-e2e.test.ts   # Webhook + GitHub + MCP E2E
 │
-├── .env                      # 环境变量
-├── .gitignore
-├── .local/deploy.md          # 部署笔记 (gitignored)
-├── bunfig.toml
-├── tsconfig.json
-├── package.json
+├── docs/
+│   └── 00-architecture.md
+│
+├── package.json / tsconfig.json / Dockerfile / docker-compose.yml
 └── README.md
 ```
 
@@ -208,157 +187,88 @@ agent-framework/
 
 ## 4. 核心组件
 
-### 4.1 Session Manager
+### 4.1 SessionManager + SessionBindingStore
 
 ```typescript
 // src/core/session.ts
-
 interface Session {
   id: string;
   userId: string;
-  agentType: string;         // string — 支持任意外部 CLI
+  agentType: string;
   messages: UnifiedMessage[];
-  context: SessionContext;
-  state: SessionState;       // active | paused | closed
-  createdAt: Date;
-  updatedAt: Date;
+  context: SessionContext;     // { workingDir?, env? }
+  state: SessionState;         // active | paused | closed
+  pinned?: boolean;            // 永久保存 (无 TTL)
+  participants?: Participant[]; // [{ channel, userId }] 跨渠道追踪
 }
 
 class SessionManager {
-  private store: SessionStore;   // MemorySessionStore | RedisSessionStore
+  create(userId, agentType, context?, sessionId?, channel?): Promise<Session>;
+  get(sessionId): Promise<Session | null>;
+  updateContext(sessionId, updates): Promise<Session>;
+  pin / unpin / close / switchAgent / addParticipant / ...
+}
 
-  async create(userId: string, agentType?: string, ...): Promise<Session>;
-  async get(sessionId: string): Promise<Session | null>;
-  async getByUserId(userId: string): Promise<Session | null>;
-  async addMessage(sessionId: string, message: UnifiedMessage): Promise<void>;
-  async switchAgent(sessionId: string, agentType: string): Promise<void>;
-  async close(sessionId: string): Promise<void>;
+class SessionBindingStore {
+  get(channel, userId): Promise<string | null>;
+  set(channel, userId, sessionId): Promise<void>;
+  getOrCreate(channel, userId, createFn): Promise<string>;
 }
 ```
 
-### 4.2 Event Bus
+### 4.2 EventBus
 
 ```typescript
-// src/core/event.ts
+class EventBus {
+  publish(event);                           // 通知 type + session 监听器
+  subscribe(type, handler);                 // 按事件类型订阅
+  subscribeSession(sessionId, handler);     // 按 session 订阅
+  broadcastToChannel(session, content);     // 发布 agent.response
+}
 
 type EventType =
-  | 'session.created'
-  | 'session.updated'
-  | 'session.closed'
-  | 'agent.thinking'
-  | 'agent.response'
-  | 'agent.error';
+  | 'session.created' | 'session.updated' | 'session.closed'
+  | 'agent.thinking' | 'agent.stream_chunk'
+  | 'agent.tool_executing' | 'agent.response' | 'agent.error';
+```
 
-interface SessionEvent {
-  type: EventType;
-  sessionId: string;
-  data: unknown;
-  timestamp: Date;
-}
+### 4.3 RuntimeAdapter
 
-class EventBus {
-  publish(event: SessionEvent): void;
-  subscribe(type: EventType, handler: EventHandler): () => void;
-  subscribeSession(sessionId: string, handler: EventHandler): () => void;
-  broadcastToChannel(session: Session, content: string): Promise<void>;
+```typescript
+interface RuntimeAdapter {
+  readonly type: 'cli' | 'session' | 'container';
+
+  start(sessionId: string, agent: Agent, workingDir?: string): Promise<void>;
+  stop(sessionId: string): Promise<void>;
+  isRunning(sessionId: string): boolean;
+  send(sessionId: string, message: string): Promise<void>;
+  read(sessionId: string): AsyncGenerator<StreamChunk>;
+  cancel(sessionId: string): Promise<void>;
+  cleanup(sessionId: string): Promise<void>;
 }
 ```
 
-### 4.3 AgentManager (取代 AgentRegistry)
+三种实现：
+
+| 实现 | 机制 | 工作目录 |
+|------|------|---------|
+| **CLIRuntime** | `bun.spawn()` 每次新进程 | `cwd: workingDir` |
+| **SessionRuntime** | `tmux new-session` + `send-keys` | `cd <workingDir> && ...` |
+| **ContainerRuntime** | `docker run --rm -i` | `-v <hostDir>:<workDir> -w <workDir>` |
+
+### 4.4 PipelineEngine
 
 ```typescript
-// src/agents/manager.ts
-
-interface AgentConfig {
-  name: string;
-  description: string;
-  runtimeType: 'cli' | 'session';
-  config: CLIConfig | SessionConfig;
-  capabilities: { streaming: boolean; multiTurn: boolean };
-}
-
-class AgentManager {
-  register(config: AgentConfig): void;
-  get(name: string): AgentConfig | null;
-  list(): AgentConfig[];
-  remove(name: string): void;
-}
-```
-
-### 4.4 Router → PipelineEngine
-
-```typescript
-// src/core/router.ts
-
-class Router {
-  async route(message: UnifiedMessage): Promise<void> {
-    // 1. Get or create session
-    const session = await this.getOrCreateSession(message);
-
-    // 2. Add message to session
-    await this.sessionManager.addMessage(session.id, message);
-
-    // 3. Execute via PipelineEngine (streaming + tool loops)
-    for await (const chunk of this.pipeline.executeStream(
-      session.agentType, session.id, message.content
-    )) {
-      if (chunk.type === 'text') responseChunks.push(chunk.content);
-      else if (chunk.type === 'error') responseError = chunk.content;
-      else if (chunk.type === 'done') break;
-    }
-
-    // 4. Add response to session
-    await this.sessionManager.addMessage(session.id, assistantMessage);
-
-    // 5. Broadcast response to all channels
-    await this.eventBus.broadcastToChannel(session, responseContent);
-  }
-}
-```
-
-### 4.5 PipelineEngine + ToolLoop
-
-```typescript
-// src/agents/pipeline/executor.ts
-
-type StreamChunk =
-  | { type: 'text'; content: string }
-  | { type: 'tool_call'; tool: string; args: unknown }
-  | { type: 'tool_result'; tool: string; result: unknown }
-  | { type: 'error'; content: string }
-  | { type: 'done' };
-
 class PipelineEngine {
-  async *executeStream(
-    agentName: string,
-    sessionId: string,
-    message: string
-  ): AsyncGenerator<StreamChunk> {
-    // 1. Runtime selection → CLIRuntime / SessionRuntime
-    // 2. Process execution → stdout streaming
-    // 3. StreamChunk.text emission
-    // 4. ToolLoop: detect tool calls → ToolRegistry.execute → repeat
-    // 5. ToolLoop terminates when agent emits final response
+  async *executeStream(agentName, sessionId, message, signal?, workingDir?) {
+    // 1. resolveRuntime(agent)
+    //    → 如果有 agent.config.container → ContainerRuntime
+    //    → 否则 agent.runtimeType → CLIRuntime / SessionRuntime
+    // 2. runtime.start(sessionId, agent, workingDir)
+    // 3. runtime.send(sessionId, message)
+    // 4. ToolLoop.run() → 多轮 tool calling
+    // 5. runtime.cleanup(sessionId)
   }
-}
-```
-
-### 4.6 SidecarRPC
-
-```typescript
-// src/core/sidecar-rpc.ts
-
-class SidecarRPC extends EventEmitter {
-  // JSON-RPC 2.0 over Go sidecar stdin/stdout
-  // Supports:
-  //   Call(method, params) → Promise<result>    (request-response)
-  //   Notify(method, params)                    (fire-and-forget)
-  //   RegisterMethod(name, handler)             (handle sidecar → node calls)
-  //   on('message', handler)                    (sidecar → node notifications)
-
-  async start(): Promise<void>;                // spawn Go process
-  stop(): void;                                 // kill
-  async call<T>(method: string, params?: unknown): Promise<T>;
 }
 ```
 
@@ -366,453 +276,167 @@ class SidecarRPC extends EventEmitter {
 
 ## 5. 渠道接入
 
-### 5.1 Channel 接口 (新架构)
+### 5.1 Channel 接口
 
 ```typescript
-// src/channels/types.ts
-
-export interface ChannelCapabilities {
-  text: boolean;         // 支持文本
-  cards: boolean;        // 支持交互式卡片
-  images: boolean;       // 支持图片
-  files: boolean;        // 支持文件
-  richText: boolean;     // 支持富文本/Markdown
-  cardActions: boolean;  // 支持卡片按钮回调
+interface ChannelCapabilities {
+  text: boolean;
+  cards: boolean;
+  images: boolean;
+  files: boolean;
+  richText: boolean;
+  cardActions: boolean;
 }
 
-export interface Channel {
-  readonly type: string;                          // 开放 string，非闭联合
+interface Channel {
+  readonly type: string;      // 开放 string
   readonly name: string;
-  readonly capabilities: ChannelCapabilities;      // 能力声明
+  readonly capabilities: ChannelCapabilities;
 
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
-
   handleEvent(event: unknown): Promise<void>;
-
-  // 结构化消息，不再是纯字符串
   send(sessionId: string, message: OutgoingMessage): Promise<void>;
 }
-
-// 统一入站消息
-export interface IncomingMessage {
-  channel: string;
-  channelId: string;
-  sessionId: string;
-  userId: string;
-  role: 'user' | 'assistant' | 'system';
-  text: string;                               // 纯文本，给 agent 消费
-  attachments?: MessageAttachment[];           // 可选富内容
-  metadata?: Record<string, unknown>;          // Channel 特有元数据
-  timestamp: Date;
-}
-
-// 统一出站消息
-export interface OutgoingMessage {
-  text: string;                                // 主要文本（所有 channel 支持）
-  card?: Record<string, unknown>;              // 可选卡片（按 capability）
-  attachments?: MessageAttachment[];           // 可选附件
-  options?: Record<string, unknown>;
-}
 ```
 
-**关键特性：**
-- `Channel.type` 是开放 `string`，不再是 `'feishu' | 'websocket' | 'ssh'` 封闭联合
-- `capabilities` 声明 channel 能力，广播时按能力分发
-- 消息携带结构，不再退化为纯文本
+### 5.2 各渠道详情
 
-### 5.2 ChannelManager — 统一生命周期管理
+| 渠道 | 入站 | 出站 |
+|------|------|------|
+| **飞书** | Sidecar JSON-RPC: `on('message')` → `router.route()` | `sendCard()` / `sendText()` via RPC |
+| **Web UI** | `POST /api/chat/:sessionId` 或 WS message | SSE stream (`agent.thinking/stream_chunk/response`) |
+| **SSH** | `handleEvent({ sessionId, content })` | `tmux send-keys` |
+| **Webhook** | `POST /api/channels/webhook/:token` | 同步 HTTP Response 或异步 fire-and-forget |
+| **GitHub** | `POST /api/channels/github/webhook` (HMAC 验证) | `POST /repos/:owner/:repo/issues/:num/comments` |
+| **MCP** | `POST /api/channels/mcp/message` (JSON-RPC) | SSE stream via `HonoSSETransport` |
+
+### 5.3 添加新渠道
 
 ```typescript
-// src/core/channel-manager.ts
-
-class ChannelManager {
-  // === Factory 管理 ===
-  registerFactory(factory: ChannelFactory): void;
-  listFactories(): ChannelFactory[];
-  listAvailableTypes(): string[];
-
-  // === 实例管理 ===
-  async enable(type: string, config: Record<string, unknown>): Promise<void>;
-  disable(type: string): void;
-  get<T extends Channel>(type: string): T | null;
-  listActive(): Channel[];
-
-  // === 生命周期 ===
-  async connectAll(): Promise<void>;      // 遍历所有已注册 channel → connect
-  async disconnectAll(): Promise<void>;   // 遍历所有已注册 channel → disconnect
-
-  // === 能力感知广播 ===
-  async broadcastText(sessionId: string, text: string): Promise<void>;
-  async broadcastCard(sessionId: string, text: string, card: Record<string, unknown>): Promise<void>;
-  async broadcast(sessionId: string, message: OutgoingMessage): Promise<void>;
-}
-```
-
-### 5.3 ChannelFactory — 统一创建方式
-
-```typescript
-// src/channels/types.ts
-
-export interface ChannelFactory {
-  readonly type: string;
-  readonly description: string;
-  readonly capabilities: ChannelCapabilities;
-
-  // 用一个统一的 config + deps 创建 channel
-  create(config: Record<string, unknown>, deps: ChannelDependencies): Channel;
-}
-
-export interface ChannelDependencies {
-  router: Router;
-  sessionManager: SessionManager;
-}
-```
-
-每个平台实现自己的 Factory，例如：
-
-```typescript
-// src/channels/feishu/factory.ts
-class FeishuChannelFactory implements ChannelFactory {
-  type = 'feishu';
-  description = '飞书 Bot (Sidecar)';
-  capabilities = { text: true, cards: true, images: false, files: false, richText: true, cardActions: true };
-
-  create(config, deps) {
-    return new SidecarFeishuChannel(deps.router, deps.sessionManager, { ... });
-  }
-}
-```
-
-### 5.4 飞书渠道 (Sidecar 模式 — 生产)
-
-```
-用户@飞书 → Feishu WS → Go Sidecar → stdin JSON-RPC → Node.js
-                                                          ↓
-                                                   handleCardAction()
-                                                   (同步返回 < 3s, 飞书要求)
-                                                          ↓
-                                                   后台 setTimeout:
-                                                   doNewSession / doSetAgent
-```
-
-- 卡片按钮点击: Sidecar 同步返回 `CardActionTriggerResponse` (卡片更新 + toast)
-- 文本消息: Sidecar → Node.js `handleSidecarMessage()` → Router → Pipeline
-- 发送: `send(OutgoingMessage{ text, card })` — 按 capability 选 text 或 card
-
-### 5.5 WebSocket 渠道
-
-```
-用户浏览器 → Bun.serve WebSocket upgrade → WebSocketChannel
-  ├── handleWSMessage() → UnifiedMessage → Router.route()
-  └── send(OutgoingMessage) → JSON.text 推送至所有同 sessionId 的 WS 连接
-```
-
-- SSE 渠道通过 `/api/chat/:sessionId/sse` + EventBus 订阅实现
-- Capabilities: text only（卡片、图片不支持）
-
-### 5.6 SSH 渠道
-
-```
-用户 SSH → 附加 tmux session → SSHChannel
-  ├── handleMessage() → UnifiedMessage → Router.route()
-  └── send(OutgoingMessage) → tmux send-keys 写入 OutgoingMessage.text
-```
-
-- Capabilities: text only
-
-### 5.7 新增一个 Channel 的流程
-
-以 DingTalk 为例：
-
-```typescript
-// 1. 创建 src/channels/dingtalk/channel.ts — 实现 Channel 接口
-// 2. 创建 src/channels/dingtalk/factory.ts — 实现 ChannelFactory
-// 3. 在 index.ts 加一条:
-channelManager.registerFactory(new DingTalkChannelFactory());
-// 4. 在 SQLite 写入配置:
-cm.set('channel_dingtalk_appKey', 'xxx');
-cm.set('channel_dingtalk_appSecret', 'yyy');
-// 5. 重启 → channelManager.initFromConfig() 自动创建 → 连接
-```
-
-**无需改：** `types.ts`、`router.ts`、`index.ts`（除了注册 factory）、`server.ts`、`event.ts`
-
----
-
-## 6. 部署架构
-
-```
-用户@飞书                   用户@浏览器               用户@SSH
-    │                           │                       │
-    │ Feishu WS                 │ HTTP/WS                │ tmux
-    ▼                           ▼                       ▼
-┌──────────────┐         ┌──────────────┐         ┌──────────────┐
-│  Go Sidecar  │         │              │         │              │
-│ feishu-sidecar│        │  Bun Server  │         │  tmux 会话   │
-│ (stdio RPC)  │◄──RPC──►│  (port 3000) │         │              │
-└──────────────┘         │              │         └──────┬───────┘
-                         │  Hono + WS   │                │
-                         │  + SSE       │◄───────────────┘
-                         └──────┬───────┘
-                                │
-                                ▼
-                         ┌──────────────┐
-                         │   SQLite     │
-                         │  (配置存储)   │
-                         └──────┬───────┘
-                                │
-                         ┌──────────────┐
-                         │    Redis     │
-                         │ (可选会话持久) │
-                         └──────────────┘
+// 1. 创建 src/channels/<name>/channel.ts
+// 2. 创建 src/channels/<name>/factory.ts
+// 3. 在 server.ts 加路由 (如果需要 HTTP 端点)
+// 4. 在 index.ts 注册:
+channelManager.registerFactory(new MyChannelFactory());
 ```
 
 ---
 
-## 7. 技术栈
+## 6. 容器运行时
 
-| 组件 | 技术选型 | 理由 |
-|------|----------|------|
-| **运行时** | Bun | 性能最佳、内置 TS 支持、单 binary |
-| **Web 框架** | Hono | 轻量、快速、类型安全 |
-| **LLM 运行时** | llama.cpp (Hermes) | 本地推理，不依赖外部 API |
-| **Agent CLI** | hermes / claude / codex / aider | 外部 CLI，通过 RuntimeAdapter 适配 |
-| **飞书接入** | Go Sidecar + JSON-RPC | 同步卡片刷新 (< 3s)，分离 SDK 日志 |
-| **会话存储** | Memory / Redis | 开发用 Memory，生产可切换 Redis |
-| **配置存储** | SQLite (better-sqlite3) | 零配置，持久化，XOR 加密 |
-| **类型检查** | TypeScript (tsc --noEmit) | 编译期检查、AI 生成友好 |
+ContainerRuntime 使用可配置的容器引擎运行 agent，适用于任意 agent：
+
+```
+<引擎> run --rm -i \
+  -v <host工作目录>:<容器工作目录> \
+  -w <容器工作目录> \
+  [--memory <limit>] [--cpus <limit>] [--network none] \
+  <镜像> <agent命令> <参数>
+```
+
+- 引擎命令通过 config `container_cmd` 配置 (默认 `docker`)
+- Agent 声明式加 `config.container` 字段 → PipelineEngine 自动选择 ContainerRuntime
+- 工作目录自动挂载为 volume
 
 ---
 
-## 8. 工作流程
+## 7. 工作目录
+
+链路:
 
 ```
-用户@飞书 ──► Sidecar ──► handleSidecarMessage()
-                                     │
-                                     ▼
-                              Router.route()
-                                     │
-                          ┌──────────┼──────────┐
-                          │                     │
-                          ▼                     ▼
-                   SessionManager          EventBus.publish
-                   getOrCreate session     ('agent.thinking')
-                          │
-                          ▼
-                   PipelineEngine.executeStream()
-                          │
-                    ┌─────┴─────┐
-                    │           │
-                    ▼           ▼
-              RuntimeAdapter  ToolLoop
-              spawn CLI       detect tool calls
-              read stdout     execute tools
-              emit chunks     feed back to agent
-                    │           │
-                    └─────┬─────┘
-                          │
-                          ▼
-                   response + streamChunks
-                          │
-                          ▼
-                   SessionManager          EventBus.publish
-                   addMessage              ('agent.response')
-                          │
-                          ▼
-                   broadcastToChannel()
-                    ┌──────┼──────┐
-                    │      │      │
-                    ▼      ▼      ▼
-                 飞书   WebSocket  SSH
-                 回复     推送     输出
+ConfigManager.get('working_dir') → '/projects/sandbox' (fallback)
+        ↓
+创建 Session 时存入 context.workingDir
+        ↓
+用户可通过 API 修改 (Web UI 双击编辑 / Feishu 卡片 / /workdir 命令)
+        ↓
+Router.route() 读取 → 传入 PipelineEngine.executeStream()
+        ↓
+RuntimeAdapter.start(sessionId, agent, workingDir) 使用
 ```
 
 ---
 
-## 9. Agent 注册 (声明式)
+## 8. MCP Server
 
-Agent 现在是纯配置，无自定义类：
+自定义 `HonoSSETransport` 适配 Bun/Hono：
 
-```typescript
-// src/index.ts
+```
+Client → GET /api/channels/mcp/sse
+        ← event: endpoint, data: /api/channels/mcp/message?sessionId=<id>
+Client → POST /api/channels/mcp/message?sessionId=<id>
+        ← SSE data: { jsonrpc: "2.0", result: { content: [...] } }
+```
 
-const agentManager = new AgentManager();
+暴露工具: `chat`, `list_agents`, `create_session`, `get_session_info`
 
-// CLI 模式: 一次性进程
-agentManager.register({
-  name: 'hermes',
-  description: 'Hermes CLI (AI assistant)',
-  runtimeType: 'cli',
-  config: { command: 'hermes', args: ['chat', '-q', '{message}', '-Q'] },
-  capabilities: { streaming: true, multiTurn: true }
-});
+---
 
-// session 模式: tmux 持久会话
-agentManager.register({
-  name: 'aider',
-  description: 'Aider coding assistant',
-  runtimeType: 'session',
-  config: {
-    command: 'aider',
-    env: { OPENAI_API_KEY: '...', OPENAI_API_BASE: '...' }
-  },
-  capabilities: { streaming: true, multiTurn: true }
-});
+## 9. 配置项
 
-// 新增 CLI 工具只需加一条 register() 调用
+| key | 类别 | 加密 | 说明 |
+|-----|------|------|------|
+| `openai_api_key` | ai | 是 | OpenAI API Key |
+| `anthropic_api_key` | ai | 是 | Anthropic API Key |
+| `default_agent` | agent | 否 | 默认 agent |
+| `working_dir` | agent | 否 | 默认工作目录 |
+| `container_cmd` | agent | 否 | 容器引擎 (docker/podman/nerdctl) |
+| `feishu_app_id` | channel | 否 | 飞书 App ID |
+| `feishu_app_secret` | channel | 是 | 飞书 App Secret |
+| `github_token` | channel | 是 | GitHub PAT |
+| `github_app_id` | channel | 否 | GitHub App ID |
+| `github_private_key` | channel | 是 | GitHub App 私钥 |
+| `github_webhook_secret` | channel | 是 | Webhook HMAC 密钥 |
+| `webhook_tokens` | system | 否 | Webhook 允许 token |
+| `port` / `host` | system | 否 | 服务器 |
+| `redis_url` | system | 否 | Redis 连接 |
+| `session_secret` | system | 是 | 加密密钥 |
+
+---
+
+## 10. 测试
+
+```
+75 tests, 0 fail, 131 expect() calls across 14 files:
+
+test/integration/
+├── sidecar-channel.test.ts  — 飞书卡片操作测试 (4 tests)
+├── sidecar-rpc.test.ts       — JSON-RPC 协议测试
+└── channels-e2e.test.ts     — Webhook + GitHub + MCP E2E (11 tests)
 ```
 
 ---
 
-## 10. 配置管理
+## 11. API 路由
 
-```typescript
-// src/core/config.ts
-
-class ConfigManager {
-  // 双来源: SQLite DB + .env 覆盖
-  // XOR 加密: 敏感字段 (feishu_app_secret) 使用 SESSION_SECRET 加密存储
-  // 热加载: reloadEnvFromDb() 将 SQLite 配置写入 process.env
-
-  get(key: string): string | null;
-  set(key: string, value: string): void;
-  getAllEntries(): Record<string, string>;
-  reloadEnvFromDb(): void;
-  reset(): void;
-}
-```
-
-**重要：** `SESSION_SECRET` 必须跨环境一致。SQLite 中的加密数据依赖此密钥，不一致会导致解密失败。
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/health` | 健康检查 |
+| GET | `/` | Web UI |
+| POST | `/api/sessions` | 创建会话 |
+| GET | `/api/sessions` | 会话列表 |
+| GET/POST | `/api/sessions/:id/working-dir` | 工作目录 |
+| POST | `/api/chat/:sessionId` | 发送消息 |
+| GET | `/api/chat/:sessionId/sse` | SSE 流 |
+| POST | `/api/chat/:sessionId/cancel` | 取消 |
+| POST | `/api/channels/webhook/:token` | Webhook |
+| POST | `/api/channels/github/webhook` | GitHub Webhook |
+| GET | `/api/channels/mcp/sse` | MCP SSE |
+| POST | `/api/channels/mcp/message` | MCP 消息 |
 
 ---
 
-## 11. 飞书 Sidecar 架构
-
-### 11.1 为什么需要 Sidecar
-
-飞书卡片按钮点击需要 **3 秒内返回** `CardActionTriggerResponse`。Node.js 事件循环 + Python 等无法保证。Go sidecar 在子进程中同步处理飞书 WS，通过 stdio 与 Node.js 通信。
-
-### 11.2 通信协议
-
-```
-┌─────────────────┐          stdin/out          ┌─────────────────┐
-│                 │  ◄────── JSON-RPC 2.0 ──────►│                 │
-│   Node.js      │                              │    Go Sidecar   │
-│                 │  request (node→go):          │                 │
-│  SidecarRPC     │    {method, params, id}      │  sendMessage    │
-│                 │  ───────────────────────────►│  sendCardSync   │
-│                 │                              │  disconnect     │
-│  registerMethod │  response (go→node):         │                 │
-│  ("cardAction") │    {result, error, id}        │                 │
-│                 │  ◄───────────────────────────│                 │
-│                 │                              │                 │
-│                 │  notification (go→node):      │                 │
-│                 │    {method:"message", params} │                 │
-│                 │  ◄───────────────────────────│                 │
-└─────────────────┘                              └─────────────────┘
-```
-
-### 11.3 卡片刷新流程
-
-```
-用户点击卡片按钮
-        │
-        ▼
-Go Sidecar 收到 card.action.trigger 事件
-        │
-        ▼
-Sidecar 将 action 转发到 Node.js (RPC call)
-        │
-        ▼
-Node.js handleCardAction():
-  ├── 构建更新后的卡片 (card builders)
-  ├── 异步操作通过 setTimeout 后台执行 (session 创建/切换)
-  └── 同步返回 { card, toast } 给 Sidecar
-        │
-        ▼
-Sidecar 返回 CardActionTriggerResponse → 飞书
-  ├── 卡片原地刷新 (< 3ms ✅)
-  └── Toast 提示
-```
-
----
-
-## 12. 飞书 Bot 配置
-
-### 12.1 飞书开放平台配置
-
-1. 创建企业自建应用, 获取 `App ID` + `App Secret`
-2. 开启机器人能力
-3. 添加权限:
-   - `im:message` — 发送消息
-   - `im:message.receive_v1` — 接收消息
-4. 事件订阅 → 添加事件 `im.message.receive_v1`
-5. 机器人能力 → 开启「接收消息」
-
-### 12.2 凭据注入
+## 12. 部署
 
 ```bash
-# 方式一: 直接写入 SQLite (推荐)
-cd /path/to/app && source ~/.bash_profile
-cat > script.ts << 'EOF'
-import { ConfigManager } from './src/core/config';
-const cm = new ConfigManager();
-cm.set('feishu_app_id', 'cli_xxxxxxxxxxxx');
-cm.set('feishu_app_secret', 'your-secret');
-EOF
-bun run script.ts && rm script.ts
-
-# 方式二: .env (覆盖 SQLite)
-echo "FEISHU_APP_ID=cli_xxx" >> .env
-echo "FEISHU_APP_SECRET=your-secret" >> .env
+bun run build                          # 构建 dist/index.js
+# 上传到服务器
+bun run dist/index.js                  # 运行
+# 或 Docker
+docker compose up -d
 ```
 
-### 12.3 消息处理流程 (Sidecar 版)
-
-```typescript
-// 文本消息
-private async handleSidecarMessage(params: any): Promise<void> {
-  const unifiedMessage = this.createUnifiedMessage(
-    params.userId, params.userId, params.content, params.userId
-  );
-  await this.router.route(unifiedMessage);
-}
-
-// 卡片按钮 (需 3 秒内返回)
-async handleCardAction(params: any): Promise<{ card; toast }> {
-  switch (params.action) {
-    case 'new_session':
-      setTimeout(() => this.doNewSession(params.userId), 0);
-      return { card: this.buildMenuCard(...), toast: '新会话' };
-    case 'set_agent':
-      setTimeout(() => this.doSetAgent(params.userId, value.agent), 0);
-      return { card: this.buildMenuCard(...), toast: `已切换` };
-    // ...
-  }
-}
-```
-
----
-
-## 13. 部署检查清单
-
-- [ ] `bun run build` 成功 (生成 `dist/index.js`)
-- [ ] Go sidecar 已编译: `cd sidecars/feishu && GOOS=linux GOARCH=amd64 make build`
-- [ ] `sidecars/feishu/feishu-sidecar` → 符号链接指向 Linux 二进制
-- [ ] 远程 `.env` 的 `SESSION_SECRET` 与本地一致
-- [ ] Feishu 凭据已写入 SQLite (或 `.env`)
-- [ ] Redis 可选: `REDIS_URL` 环境变量
-- [ ] 运行: `bun run dist/index.js`
-- [ ] 健康检查: `curl -s http://host:3000/health`
-- [ ] 飞书发送消息验证
-
----
-
-## 14. 参考
-
-- [飞书开放平台](https://open.feishu.cn/document/)
-- [Bun 文档](https://bun.sh/docs)
-- [Hono 文档](https://hono.dev/)
-- JSON-RPC 2.0: https://www.jsonrpc.org/specification
+健康检查: `curl http://host:3000/health`
