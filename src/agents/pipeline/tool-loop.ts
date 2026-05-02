@@ -16,11 +16,13 @@ export class ToolLoop {
     private runtime: RuntimeAdapter,
     private sessionId: string,
     private toolRegistry: ToolRegistry,
-    private maxRounds = 10
+    private maxRounds = 10,
+    private signal?: AbortSignal,
   ) {}
 
   async *run(): AsyncGenerator<StreamChunk> {
     for (let round = 0; round < this.maxRounds; round++) {
+      if (this.signal?.aborted) return;
       let hasToolCall = false;
 
       for await (const chunk of this.runtime.read(this.sessionId)) {

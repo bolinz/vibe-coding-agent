@@ -6,6 +6,8 @@ import type { AgentManager } from '../agents/manager';
 import { PipelineEngine } from '../agents/pipeline/executor';
 
 export class Router {
+  private runningPipelines = new Map<string, AbortController>();
+
   constructor(
     private sessionManager: SessionManager,
     private agentManager: AgentManager,
@@ -24,6 +26,18 @@ export class Router {
 
   getDefaultAgent(): string {
     return this.defaultAgent;
+  }
+
+  cancel(sessionId: string): void {
+    const controller = this.runningPipelines.get(sessionId);
+    if (controller) {
+      controller.abort();
+      this.runningPipelines.delete(sessionId);
+    }
+  }
+
+  isRunning(sessionId: string): boolean {
+    return this.runningPipelines.has(sessionId);
   }
 
   async route(message: UnifiedMessage): Promise<void> {
@@ -66,23 +80,45 @@ export class Router {
       const responseChunks: string[] = [];
       let responseError: string | undefined;
 
-      for await (const chunk of this.pipeline.executeStream(
-        agentName,
-        session.id,
-        message.content
-      )) {
-        if (chunk.type === 'text') {
-          responseChunks.push(chunk.content);
-        } else if (chunk.type === 'error') {
-          responseError = chunk.content;
-        } else if (chunk.type === 'done') {
-          break;
+      const abortController = new AbortController();
+      this.runningPipelines.set(session.id, abortController);
+
+      try {
+        for await (const chunk of this.pipeline.executeStream(
+          agentName,
+          session.id,
+          message.content,
+          abortController.signal,
+        )) {
+          if (chunk.type === 'text') {
+            responseChunks.push(chunk.content);
+            this.eventBus.publish({
+              type: 'agent.stream_chunk',
+              sessionId: session.id,
+              data: { content: chunk.content },
+              timestamp: new Date(),
+            });
+          } else if (chunk.type === 'error') {
+            responseError = chunk.content;
+          } else if (chunk.type === 'tool_call') {
+            this.eventBus.publish({
+              type: 'agent.tool_executing',
+              sessionId: session.id,
+              data: { toolName: chunk.toolName, toolArgs: chunk.toolArgs },
+              timestamp: new Date(),
+            });
+          } else if (chunk.type === 'done') {
+            break;
+          }
         }
-        // tool_call and tool_result are handled internally by ToolLoop;
-        // they don't surface to the user-facing response.
+      } finally {
+        this.runningPipelines.delete(session.id);
       }
 
       const responseContent = responseChunks.join('');
+
+      // If aborted, don't save to session or broadcast
+      if (abortController.signal.aborted) return;
 
       // 4. Add response to session
       const assistantMessage: UnifiedMessage = {

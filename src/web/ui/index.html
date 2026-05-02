@@ -36,6 +36,15 @@
       align-items: center;
       gap: 0.5rem;
     }
+    .conn-dot {
+      font-size: 0.7rem;
+      margin-left: 0.4rem;
+      transition: color 0.3s;
+    }
+    .conn-on { color: #4caf50; }
+    .conn-ws { color: #ff9800; }
+    .conn-off { color: #f44336; }
+
     .nav-buttons {
       display: flex;
       gap: 0.5rem;
@@ -133,6 +142,18 @@
       color: #666;
       margin-top: 0.1rem;
     }
+    .session-item .session-agent {
+      font-size: 0.6rem;
+      margin-top: 0.2rem;
+      background: #1a1a2e;
+      color: #aaa;
+      border: 1px solid #0f3460;
+      border-radius: 3px;
+      padding: 0.1rem 0.2rem;
+      cursor: pointer;
+      width: 100%;
+    }
+    .session-item .session-agent:hover { border-color: #00d9ff; }
     .session-item .session-del {
       position: absolute;
       top: 0.3rem;
@@ -295,12 +316,32 @@
     }
     .typing {
       display: flex;
-      gap: 0.25rem;
-      padding: 0.75rem 1rem;
-      background: #16213e;
-      align-self: flex-start;
-      border-radius: 0.75rem;
-      border-bottom-left-radius: 0.25rem;
+      gap: 0.3rem;
+      padding: 0.7rem 1rem;
+      align-items: center;
+    }
+    .typing .typing-dots {
+      display: flex;
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .typing .typing-dots span {
+      width: 8px;
+      height: 8px;
+      background: #00d9ff;
+      border-radius: 50%;
+      animation: typing 1.4s infinite;
+    }
+    .typing .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+    .typing .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+    .typing-status {
+      font-size: 0.75rem;
+      color: #00d9ff;
+      margin-left: 0.5rem;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-4px); }
     }
     .typing span {
       width: 8px; height: 8px;
@@ -339,14 +380,23 @@
       border-color: #00d9ff;
     }
     .input-container button {
-      padding: 0.75rem 1.5rem;
       background: #00d9ff;
-      color: #1a1a2e;
       border: none;
-      border-radius: 0.5rem;
-      font-weight: 600;
+      color: #1a1a2e;
+      padding: 0.5rem 1rem;
+      border-radius: 0 0.4rem 0.4rem 0;
       cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
     }
+    #cancelBtn {
+      background: #f44336;
+      color: #fff;
+      border-radius: 0;
+      font-weight: bold;
+      padding: 0.5rem 0.8rem;
+    }
+    #cancelBtn:hover { background: #d32f2f; }
     .input-container button:hover { background: #00b8d9; }
     .input-container button:disabled { background: #555; cursor: not-allowed; }
 
@@ -461,7 +511,7 @@
 </head>
 <body>
   <div class="header">
-    <h1><span>🤖</span> AI Coding Agent</h1>
+    <h1><span>🤖</span> AI Coding Agent <span id="connStatus" class="conn-dot conn-off" title="未连接">●</span></h1>
     <div class="nav-buttons">
       <button class="nav-btn" data-view="welcome" title="欢迎">❓</button>
       <button class="nav-btn active" data-view="chat" title="聊天">💬</button>
@@ -514,6 +564,7 @@
         <div class="input-area">
           <div class="input-container">
             <input type="text" id="messageInput" placeholder="输入消息..." autocomplete="off">
+            <button id="cancelBtn" style="display:none" title="取消当前请求">✕</button>
             <button id="sendBtn">发送</button>
           </div>
         </div>
@@ -611,12 +662,13 @@
       loadSessions().then(sessions => {
         list.innerHTML = sessions.map(s => {
           const active = s.id === currentSessionId ? 'active' : '';
-          const name = s.agentType + ' ' + s.id.slice(0, 8);
           return '<div class="session-item ' + active + '" data-id="' + s.id + '">' +
             '<button class="session-del" data-id="' + s.id + '" title="关闭会话">\u00d7</button>' +
-            '<div class="session-name">' + name + '</div>' +
-            '<div class="session-meta">' + s.messageCount + ' \u6761\u6d88\u606f \u00b7 ' + formatTime(s.createdAt) + '</div>' +
-            '</div>';
+            '<div class="session-name">' + s.agentType + ' ' + s.id.slice(0, 8) + '</div>' +
+            '<div class="session-meta">' + s.messageCount + ' 条消息 · ' + formatTime(s.createdAt) + '</div>' +
+            '<select class="session-agent" data-session="' + s.id + '" title="切换 Agent">' +
+            AGENTS.map(a => '<option value="' + a + '"' + (a === s.agentType ? ' selected' : '') + '>' + a + '</option>').join('') +
+            '</select></div>';
         }).join('');
 
         list.querySelectorAll('.session-item').forEach(el => {
@@ -629,7 +681,7 @@
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
             const id = btn.dataset.id;
-            if (!confirm('\u786e\u5b9a\u5173\u95ed\u6b64\u4f1a\u8bdd\uff1f')) return;
+            if (!confirm('确定关闭此会话？')) return;
             await apiDelete('/sessions/' + id);
             if (id === currentSessionId) {
               currentSessionId = null;
@@ -642,6 +694,17 @@
               else await createNewSession();
             }
           });
+        });
+        list.querySelectorAll('.session-agent').forEach(sel => {
+          sel.addEventListener('change', async (e) => {
+            e.stopPropagation();
+            const sessionId = sel.dataset.session;
+            const agent = sel.value;
+            await apiPost('/sessions/' + sessionId + '/switch-agent', { agentType: agent });
+            renderSessionList();
+            toast('已切换至 ' + agent);
+          });
+        });
         });
       });
     }
@@ -686,6 +749,13 @@
 
     document.getElementById('newSessionBtn').addEventListener('click', createNewSession);
 
+    document.getElementById('cancelBtn').addEventListener('click', async () => {
+      if (!currentSessionId) return;
+      await fetch('/api/chat/' + currentSessionId + '/cancel', { method: 'POST' });
+      removeTyping();
+      addMessage('system', '已取消');
+    });
+
     // ==================== CHAT ====================
     const chat = document.getElementById('chat');
     const input = document.getElementById('messageInput');
@@ -694,6 +764,16 @@
     let wsFallback = null;
     let useSSE = true;
     let refreshingList = false;
+    let cancelBtn = null;
+    const AGENTS = ['echo', 'hermes', 'claude', 'codex', 'cline', 'aider'];
+
+    function updateConnStatus() {
+      const dot = document.getElementById('connStatus');
+      if (!dot) return;
+      if (sse) { dot.className = 'conn-dot conn-on'; dot.title = 'SSE 已连接'; }
+      else if (wsFallback && wsFallback.readyState === WebSocket.OPEN) { dot.className = 'conn-dot conn-ws'; dot.title = 'WebSocket 已连接'; }
+      else { dot.className = 'conn-dot conn-off'; dot.title = '未连接'; }
+    }
 
     function reconnectSSE() {
       if (sse) { sse.close(); sse = null; }
@@ -705,13 +785,58 @@
       sse.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (data.type === 'response') {
+          if (data.type === 'thinking') {
+            showTyping('正在思考...');
+            document.getElementById('cancelBtn').style.display = '';
+          } else if (data.type === 'tool_executing') {
+            showTyping('正在执行: ' + (data.toolName || '工具'));
+            document.getElementById('cancelBtn').style.display = '';
+          } else if (data.type === 'stream_chunk') {
+            // progressive content - append to last assistant message
+            const lastMsg = chat.querySelector('.message.assistant:last-child');
+            if (lastMsg) {
+              lastMsg.textContent += data.content;
+              chat.scrollTop = chat.scrollHeight;
+            }
+          } else if (data.type === 'response') {
             removeTyping();
             addMessage('assistant', data.content);
             if (!refreshingList) {
               refreshingList = true;
               setTimeout(() => { renderSessionList(); refreshingList = false; }, 500);
             }
+          } else if (data.type === 'error') {
+            removeTyping();
+            addMessage('system', '错误: ' + data.content);
+          }
+          updateConnStatus();
+        } catch (e) {}
+      };
+      sse.onerror = () => {
+        sse.close();
+        sse = null;
+        useSSE = false;
+        updateConnStatus();
+        connectWS();
+      };
+      sse.onopen = () => { updateConnStatus(); };
+    }
+
+    function connectWS() {
+      if (!currentSessionId) return;
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsFallback = new WebSocket(protocol + '//' + location.host + '/ws?sessionId=' + currentSessionId);
+      wsFallback.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'response') {
+          removeTyping();
+          addMessage('assistant', data.content);
+        }
+        updateConnStatus();
+      };
+      wsFallback.onopen = () => { updateConnStatus(); };
+      wsFallback.onclose = () => { updateConnStatus(); setTimeout(connectWS, 3000); };
+    }
           } else if (data.type === 'error') {
             removeTyping();
             addMessage('system', '\u9519\u8bef: ' + data.content);
@@ -747,18 +872,25 @@
       chat.appendChild(msg);
       chat.scrollTop = chat.scrollHeight;
     }
-    function showTyping() {
-      if (document.getElementById('typing')) return;
-      const typing = document.createElement('div');
-      typing.className = 'typing';
-      typing.id = 'typing';
-      typing.innerHTML = '<span></span><span></span><span></span>';
-      chat.appendChild(typing);
+    function showTyping(statusText) {
+      let typing = document.getElementById('typing');
+      if (!typing) {
+        typing = document.createElement('div');
+        typing.className = 'typing';
+        typing.id = 'typing';
+        typing.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div><span class="typing-status" id="typingStatus"></span>';
+        chat.appendChild(typing);
+      }
+      const statusEl = document.getElementById('typingStatus');
+      if (statusEl && statusText) {
+        statusEl.textContent = statusText;
+      }
       chat.scrollTop = chat.scrollHeight;
     }
     function removeTyping() {
       const typing = document.getElementById('typing');
       if (typing) typing.remove();
+      document.getElementById('cancelBtn').style.display = 'none';
     }
 
     async function send() {

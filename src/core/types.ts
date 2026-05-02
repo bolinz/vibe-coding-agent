@@ -87,6 +87,8 @@ export type EventType =
   | 'session.updated'
   | 'session.closed'
   | 'agent.thinking'
+  | 'agent.tool_executing'
+  | 'agent.stream_chunk'
   | 'agent.response'
   | 'agent.error';
 

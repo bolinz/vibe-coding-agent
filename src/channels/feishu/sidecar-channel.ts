@@ -1,6 +1,7 @@
 import type { Channel, ChannelCapabilities, OutgoingMessage } from '../types';
 import type { Router } from '../../core/router';
 import type { SessionManager } from '../../core/session';
+import type { EventBus } from '../../core/event';
 import { SidecarRPC } from '../../core/sidecar-rpc';
 import { FeishuCardBuilder } from './card-builder';
 import { FeishuMenuStateManager } from './menu-state';
@@ -29,14 +30,22 @@ export class SidecarFeishuChannel implements Channel {
   private cardBuilder: FeishuCardBuilder;
   private menuState: FeishuMenuStateManager;
   private router: Router;
+  private eventBus: EventBus;
+  private loadingMessageIds = new Map<string, string>();
+  private unsubscribeEvent: (() => void) | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 10;
+  private shouldReconnect = false;
 
   constructor(
     router: Router,
     private sessionManager: SessionManager,
+    eventBus: EventBus,
     config: FeishuConfig,
   ) {
     this.router = router;
     this.config = config;
+    this.eventBus = eventBus;
     this.cardBuilder = new FeishuCardBuilder(router);
     this.menuState = new FeishuMenuStateManager(
       sessionManager,
@@ -55,6 +64,11 @@ export class SidecarFeishuChannel implements Channel {
       return;
     }
 
+    await this.startSidecar();
+    this.subscribeEvents();
+  }
+
+  private async startSidecar(): Promise<void> {
     const sidecarPath = findSidecarBinary('feishu');
     if (!sidecarPath) {
       console.error('[FeishuSidecar] feishu-sidecar binary not found');
@@ -72,11 +86,87 @@ export class SidecarFeishuChannel implements Channel {
     this.rpc.registerMethod('cardAction', (params: any) => this.handleCardAction(params));
     this.rpc.on('message', (params: any) => this.handleSidecarMessage(params));
 
+    this.rpc.on('exit', (code: number | null) => {
+      console.log(`[FeishuSidecar] Sidecar exited with code ${code}`);
+      if (this.shouldReconnect) {
+        this.scheduleReconnect();
+      }
+    });
+
     await this.rpc.start();
+    this.reconnectAttempts = 0;
     console.log('[FeishuSidecar] Connected via Go sidecar');
   }
 
+  private scheduleReconnect(): void {
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+    this.reconnectAttempts++;
+    if (this.reconnectAttempts > this.maxReconnectAttempts) {
+      console.error('[FeishuSidecar] Max reconnect attempts reached');
+      return;
+    }
+    console.log(`[FeishuSidecar] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    setTimeout(() => this.startSidecar(), delay);
+  }
+
+  private subscribeEvents(): void {
+    this.unsubscribeEvent = this.eventBus.subscribeSession('*', (event) => {
+      if (event.type === 'agent.thinking') {
+        this.handleThinking(event.sessionId, (event.data as any)?.content);
+      } else if (event.type === 'agent.tool_executing') {
+        this.handleToolExecuting(event.sessionId, (event.data as any)?.toolName);
+      } else if (event.type === 'agent.response') {
+        this.handleResponse(event.sessionId, (event.data as any)?.content);
+      } else if (event.type === 'agent.error') {
+        this.handleError(event.sessionId, (event.data as any)?.error);
+      } else if (event.type === 'agent.stream_chunk') {
+        // Feishu doesn't support streaming, ignore
+      }
+    });
+  }
+
+  private async handleThinking(userId: string, _userMessage: string): Promise<void> {
+    const loadingCard = this.cardBuilder.buildLoadingCard();
+    try {
+      const result = await this.rpc?.call('sendCardSync', {
+        receiveId: userId,
+        card: loadingCard,
+      }) as any;
+      if (result?.messageId) {
+        this.loadingMessageIds.set(userId, result.messageId);
+      }
+    } catch (error) {
+      console.error('[FeishuSidecar] Failed to send loading card:', error);
+    }
+  }
+
+  private async handleToolExecuting(userId: string, toolName: string): Promise<void> {
+    const card = this.cardBuilder.buildToolExecutingCard(toolName);
+    try {
+      await this.rpc?.call('sendCardSync', { receiveId: userId, card });
+    } catch (error) {
+      console.error('[FeishuSidecar] Failed to send tool executing card:', error);
+    }
+  }
+
+  private async handleResponse(userId: string, content: string): Promise<void> {
+    this.loadingMessageIds.delete(userId);
+    if (!content) return;
+    await this.sendText(userId, content);
+  }
+
+  private async handleError(userId: string, errorMsg: string): Promise<void> {
+    this.loadingMessageIds.delete(userId);
+    if (!errorMsg) return;
+    await this.sendText(userId, `❌ 发生错误：${errorMsg}`);
+  }
+
   async disconnect(): Promise<void> {
+    this.shouldReconnect = false;
+    if (this.unsubscribeEvent) {
+      this.unsubscribeEvent();
+      this.unsubscribeEvent = null;
+    }
     if (this.rpc) {
       try { await this.rpc.call('disconnect'); } catch {}
       this.rpc.stop();
@@ -173,11 +263,18 @@ export class SidecarFeishuChannel implements Channel {
 
     switch (action) {
       case 'new_session':
-        setTimeout(() => this.doNewSession(userId), 0);
-        return {
-          card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
-          toast: { type: 'success', content: '已创建新会话' },
-        };
+        try {
+          await this.doNewSession(userId);
+          return {
+            card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
+            toast: { type: 'success', content: '已创建新会话' },
+          };
+        } catch (error) {
+          return {
+            card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
+            toast: { type: 'error', content: '创建会话失败' },
+          };
+        }
 
       case 'switch_agent':
         return {
@@ -195,11 +292,18 @@ export class SidecarFeishuChannel implements Channel {
             toast: { type: 'error', content: '未知 Agent' },
           };
         }
-        setTimeout(() => this.doSetAgent(userId, agentName), 0);
-        return {
-          card: this.cardBuilder.buildMenuCard(agentName, session?.id),
-          toast: { type: 'success', content: `已切换至 ${agentName}` },
-        };
+        try {
+          await this.doSetAgent(userId, agentName);
+          return {
+            card: this.cardBuilder.buildMenuCard(agentName, session?.id),
+            toast: { type: 'success', content: `已切换至 ${agentName}` },
+          };
+        } catch (error) {
+          return {
+            card: this.cardBuilder.buildMenuCard(currentAgent, session?.id),
+            toast: { type: 'error', content: '切换 Agent 失败' },
+          };
+        }
       }
 
       case 'switch_session': {
@@ -222,12 +326,19 @@ export class SidecarFeishuChannel implements Channel {
             toast: { type: 'error', content: '无效会话' },
           };
         }
-        setTimeout(() => this.doSetSession(userId, sessionId), 0);
-        const targetSession = await this.sessionManager.get(sessionId);
-        return {
-          card: this.cardBuilder.buildMenuCard(targetSession?.agentType ?? this.router.getDefaultAgent(), sessionId),
-          toast: { type: 'success', content: `已切换至 ${sessionId.slice(0, 8)}...` },
-        };
+        try {
+          await this.doSetSession(userId, sessionId);
+          const targetSession = await this.sessionManager.get(sessionId);
+          return {
+            card: this.cardBuilder.buildMenuCard(targetSession?.agentType ?? this.router.getDefaultAgent(), sessionId),
+            toast: { type: 'success', content: `已切换至 ${sessionId.slice(0, 8)}...` },
+          };
+        } catch (error) {
+          return {
+            card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
+            toast: { type: 'error', content: '切换会话失败' },
+          };
+        }
       }
 
       case 'info': {

@@ -26,7 +26,8 @@ export class PipelineEngine {
   async *executeStream(
     agentName: string,
     sessionId: string,
-    message: string
+    message: string,
+    signal?: AbortSignal,
   ): AsyncGenerator<StreamChunk> {
     const agent = this.agentManager.get(agentName);
     if (!agent) {
@@ -36,22 +37,37 @@ export class PipelineEngine {
 
     const runtime = this.runtimeRegistry.get(agent.runtimeType);
 
+    if (signal?.aborted) return;
+
     // Initialize runtime
     await runtime.start(sessionId, agent);
+
+    if (signal?.aborted) {
+      await runtime.cancel(sessionId);
+      await runtime.cleanup(sessionId);
+      return;
+    }
 
     try {
       // Send user message
       await runtime.send(sessionId, message);
+
+      if (signal?.aborted) {
+        await runtime.cancel(sessionId);
+        return;
+      }
 
       // Run tool loop (handles multi-round tool calling)
       const toolLoop = new ToolLoop(
         runtime,
         sessionId,
         this.toolRegistry,
-        this.options.maxToolRounds ?? 10
+        this.options.maxToolRounds ?? 10,
+        signal,
       );
 
       for await (const chunk of toolLoop.run()) {
+        if (signal?.aborted) break;
         yield chunk;
       }
     } finally {

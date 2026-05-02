@@ -125,6 +125,44 @@ export class FeishuCardBuilder {
     };
   }
 
+  buildLoadingCard(): Record<string, unknown> {
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: '🤔 思考中...' },
+        template: 'blue',
+      },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: '正在处理你的请求，请稍候...',
+          },
+        },
+      ],
+    };
+  }
+
+  buildToolExecutingCard(toolName: string): Record<string, unknown> {
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: '🔧 执行工具' },
+        template: 'blue',
+      },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `正在执行工具: \`${toolName}\``,
+          },
+        },
+      ],
+    };
+  }
+
   buildSessionListCard(sessions: Array<{ id: string; agentType: string; messageCount: number }>, currentSessionId?: string): Record<string, unknown> {
     const actions = sessions.map((s) => ({
       tag: 'button',

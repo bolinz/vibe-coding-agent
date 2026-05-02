@@ -82,7 +82,7 @@ async function main() {
 
   // ===== Channel Manager =====
   const channelManager = new ChannelManager();
-  channelManager.setDependencies({ router, sessionManager });
+  channelManager.setDependencies({ router, sessionManager, eventBus });
 
   // Register factories
   channelManager.registerFactory(new FeishuChannelFactory());

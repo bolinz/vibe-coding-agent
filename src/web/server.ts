@@ -503,6 +503,19 @@ export class WebServer {
       }
     });
 
+    // Cancel running pipeline
+    api.post('/chat/:sessionId/cancel', async (c) => {
+      const sessionId = c.req.param('sessionId');
+      this.router.cancel(sessionId);
+      return c.json({ success: true });
+    });
+
+    // Check if a pipeline is running
+    api.get('/chat/:sessionId/running', async (c) => {
+      const sessionId = c.req.param('sessionId');
+      return c.json({ running: this.router.isRunning(sessionId) });
+    });
+
     // Chat SSE stream
     api.get('/chat/:sessionId/sse', async (c) => {
       const sessionId = c.req.param('sessionId');
@@ -518,7 +531,25 @@ export class WebServer {
           };
 
           const unsubscribe = this.eventBus.subscribeSession(sessionId, (event) => {
-            if (event.type === 'agent.response') {
+            if (event.type === 'agent.thinking') {
+              send({
+                type: 'thinking',
+                content: (event.data as any)?.content ?? '',
+                timestamp: event.timestamp.toISOString(),
+              });
+            } else if (event.type === 'agent.tool_executing') {
+              send({
+                type: 'tool_executing',
+                toolName: (event.data as any)?.toolName ?? '',
+                timestamp: event.timestamp.toISOString(),
+              });
+            } else if (event.type === 'agent.stream_chunk') {
+              send({
+                type: 'stream_chunk',
+                content: (event.data as any)?.content ?? '',
+                timestamp: event.timestamp.toISOString(),
+              });
+            } else if (event.type === 'agent.response') {
               const data = event.data as { content?: string };
               if (data.content) {
                 send({

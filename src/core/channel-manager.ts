@@ -55,7 +55,11 @@ export class ChannelManager {
     }
   }
 
-  setDependencies(deps: { router: import('./router').Router; sessionManager: import('./session').SessionManager }): void {
+  setDependencies(deps: {
+    router: import('./router').Router;
+    sessionManager: import('./session').SessionManager;
+    eventBus: import('./event').EventBus;
+  }): void {
     (this as any).__deps = deps;
   }
 
