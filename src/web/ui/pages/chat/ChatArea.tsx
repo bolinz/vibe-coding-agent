@@ -1,5 +1,6 @@
 import { h } from 'preact';
 import { useRef, useEffect, useState } from 'preact/hooks';
+import { ChevronDown } from 'lucide-preact';
 import type { MessageData } from '../../shared/types';
 import { MessageList } from './MessageList';
 
@@ -17,6 +18,10 @@ export function ChatArea({ messages, typingText }: Props) {
     if (container) container.scrollTop = container.scrollHeight;
   };
 
+  useEffect(() => {
+    if (nearBottom) scrollToBottom();
+  }, [messages, typingText]);
+
   const handleScroll = () => {
     const container = containerRef.current?.querySelector('.chat-container');
     if (!container) return;
@@ -26,7 +31,7 @@ export function ChatArea({ messages, typingText }: Props) {
 
   return (
     <div ref={containerRef} style="flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;">
-      <div style="flex:1;overflow-y:auto;" onScroll={handleScroll}>
+      <div class="chat-container" onScroll={handleScroll}>
         <MessageList messages={messages} typingText={typingText} />
       </div>
       <button
@@ -35,7 +40,7 @@ export function ChatArea({ messages, typingText }: Props) {
         onClick={scrollToBottom}
         title="滚动到底部"
       >
-        ↓
+        <ChevronDown size={16} />
       </button>
     </div>
   );

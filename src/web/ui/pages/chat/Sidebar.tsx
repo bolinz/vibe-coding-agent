@@ -1,5 +1,6 @@
 import { h } from 'preact';
 import { useState } from 'preact/hooks';
+import { Plus, X, Pin, PinOff, Folder, Smartphone, Globe, Terminal } from 'lucide-preact';
 import type { SessionData } from '../../shared/types';
 import { formatTime } from '../../shared/utils';
 import { api } from '../../shared/api';
@@ -13,6 +14,12 @@ interface Props {
   onSessionsChange: () => Promise<void>;
 }
 
+const CHANNEL_ICONS: Record<string, any> = {
+  feishu: Smartphone,
+  websocket: Globe,
+  ssh: Terminal,
+};
+
 function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
   session: SessionData;
   isActive: boolean;
@@ -22,12 +29,7 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
   const [editingWD, setEditingWD] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const channels = (session.participants || []).map(p => {
-    if (p.channel === 'feishu') return '📱';
-    if (p.channel === 'websocket') return '🌐';
-    if (p.channel === 'ssh') return '💻';
-    return '';
-  }).join(' ');
+  const channels = (session.participants || []).map(p => CHANNEL_ICONS[p.channel]).filter(Boolean);
 
   const cls = [
     'session-item',
@@ -39,9 +41,7 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
   const handleDelete = async (e: MouseEvent) => {
     e.stopPropagation();
     setDeleting(true);
-    try {
-      await api.sessions.close(session.id);
-    } catch {}
+    try { await api.sessions.close(session.id); } catch {}
     onSessionsChange();
   };
 
@@ -57,17 +57,13 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
   const handleAgentChange = async (e: Event) => {
     e.stopPropagation();
     const agent = (e.target as HTMLSelectElement).value;
-    try {
-      await api.sessions.switchAgent(session.id, agent);
-    } catch {}
+    try { await api.sessions.switchAgent(session.id, agent); } catch {}
     onSessionsChange();
   };
 
   const handleWDBlur = async (e: FocusEvent) => {
     const val = (e.target as HTMLInputElement).value.trim() || '/projects/sandbox';
-    try {
-      await api.sessions.setWorkingDir(session.id, val);
-    } catch {}
+    try { await api.sessions.setWorkingDir(session.id, val); } catch {}
     setEditingWD(false);
     onSessionsChange();
   };
@@ -81,10 +77,14 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
 
   return (
     <div class={cls} onClick={() => onSwitch(session.id)}>
-      <button class="session-del" onClick={handleDelete} title="关闭会话">×</button>
+      <button class="session-del" onClick={handleDelete} title="关闭会话">
+        <X size={13} />
+      </button>
       <div class="session-name">
-        {session.pinned ? '📌 ' : ''}{session.agentType} {session.id.slice(0, 8)}
-        <span class="session-channels">{channels}</span>
+        <span>{session.agentType} {session.id.slice(0, 8)}</span>
+        <span class="session-channels">
+          {channels.map((Icon, i) => <Icon key={i} size={12} />)}
+        </span>
       </div>
       <div class="session-meta">{session.messageCount} 条 · {formatTime(session.createdAt)}</div>
       {editingWD ? (
@@ -98,14 +98,15 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
         />
       ) : (
         <div class="session-wd" onDblClick={(e) => { e.stopPropagation(); setEditingWD(true); }}>
+          <Folder size={11} />
           {session.workingDir || '/projects/sandbox'}
         </div>
       )}
       <select class="session-agent" value={session.agentType} onChange={handleAgentChange} onClick={(e) => e.stopPropagation()}>
         {AGENTS.map(a => <option value={a}>{a}</option>)}
       </select>
-      <button class="session-pin" onClick={handlePin} title={session.pinned ? '取消保存' : '永久保存'}>
-        {session.pinned ? '📌' : '📍'}
+      <button class="session-pin" onClick={handlePin} title={session.pinned ? '取消置顶' : '置顶'}>
+        {session.pinned ? <Pin size={13} /> : <PinOff size={13} />}
       </button>
     </div>
   );
@@ -117,8 +118,8 @@ export function Sidebar({ collapsed, sessions, currentSessionId, onSwitch, onCre
   return (
     <aside class={`sidebar${collapsed ? ' collapsed' : ''}`}>
       <div class="sidebar-header">
-        <h3>📋 会话</h3>
-        <button onClick={onCreate} title="新建会话">+</button>
+        <h3>Sessions</h3>
+        <button onClick={onCreate} title="新建会话"><Plus size={16} /></button>
       </div>
       <div class="session-list">
         {sorted.map(s => (

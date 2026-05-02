@@ -1,4 +1,7 @@
 import { h } from 'preact';
+import { CheckCircle, XCircle, RefreshCw, QrCode } from 'lucide-preact';
+import { useState, useEffect } from 'preact/hooks';
+import { api } from '../../shared/api';
 
 interface Props {
   connected: boolean;
@@ -7,62 +10,60 @@ interface Props {
   setFeishuSSE: (sse: EventSource | null) => void;
 }
 
-declare function toast(msg: string): void;
-
 export function FeishuCard({ connected, onStatusChange, feishuSSE, setFeishuSSE }: Props) {
-  const handleRegister = async () => {
-    if (feishuSSE) { feishuSSE.close(); setFeishuSSE(null); }
-    try {
-      const data = await (await fetch('/api/feishu/register/init', { method: 'POST' })).json();
-      if (!data.success) return;
-      // Create SSE for registration
-      const sse = new EventSource(`/api/feishu/register/${encodeURIComponent(data.deviceCode)}/sse`);
-      sse.onmessage = async (event) => {
-        const reg = JSON.parse(event.data);
-        if (reg.done) { sse.close(); setFeishuSSE(null); return; }
-        if (reg.status === 'success') {
-          sse.close(); setFeishuSSE(null);
-          const appIdInput = document.getElementById('cfg-feishu_app_id') as HTMLInputElement;
-          const appSecretInput = document.getElementById('cfg-feishu_app_secret') as HTMLInputElement;
-          if (appIdInput) appIdInput.value = reg.appId || '';
-          if (appSecretInput) appSecretInput.value = reg.appSecret || '';
-          await fetch('/api/config/batch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feishu_app_id: reg.appId || '', feishu_app_secret: reg.appSecret || '' }) });
-          await fetch('/api/config/reload', { method: 'POST' });
-          onStatusChange();
-        }
-      };
-      setFeishuSSE(sse);
-    } catch (e) {
-      console.error('feishu register error', e);
-    }
-  };
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
 
   const handleTest = async () => {
+    setTesting(true);
+    setTestResult(null);
     try {
-      const res = await (await fetch('/api/feishu/test', { method: 'POST' })).json();
-      onStatusChange();
+      const result = await api.feishu.test();
+      setTestResult(result.success ? '连接正常' : `失败: ${result.message}`);
+    } catch (e: any) {
+      setTestResult(`错误: ${e.message}`);
+    }
+    setTesting(false);
+  };
+
+  const handleScan = async () => {
+    try {
+      const result = await api.feishu.register();
+      if (result.qrUrl) {
+        window.open(result.qrUrl, '_blank');
+      }
     } catch {}
   };
 
   return (
     <div class="feishu-card">
       <div class="feishu-card-row">
-        <div class="feishu-qr-box" id="feishu-register-qr">
-          点击下方按钮生成二维码
+        <div class="feishu-qr-box">
+          <QrCode size={32} />
         </div>
         <div class="feishu-info">
           <div class={`feishu-status-badge ${connected ? 'connected' : 'disconnected'}`}>
-            {connected ? '● 已连接' : '○ 未连接'}
+            {connected ? <CheckCircle size={12} /> : <XCircle size={12} />}
+            {connected ? '已连接' : '未连接'}
           </div>
-          <div style="font-size:0.8rem;color:#666688;line-height:1.6;">
-            <div>步骤: 1. 点击扫码创建 2. 用飞书 App 扫码</div>
-            <div>3. 授权后自动填入凭证 4. 点击测试连接验证</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:0.5rem;">
+            飞书机器人接入
           </div>
           <div class="feishu-actions">
-            <button class="btn-scan" onClick={handleRegister}>📷 扫码创建机器人</button>
-            <button class="btn-test" onClick={handleTest}>🔌 测试连接</button>
+            <button class="btn-test" onClick={handleTest} disabled={testing}>
+              <RefreshCw size={13} class={testing ? 'spinning' : ''} />
+              {testing ? '测试中' : '测试连接'}
+            </button>
+            <button class="btn-scan" onClick={handleScan}>
+              <QrCode size={13} />
+              重新扫码
+            </button>
           </div>
-          <div id="feishu-test-result" class="feishu-test-result"></div>
+          {testResult && (
+            <div class="feishu-test-result" style={{ color: testResult.includes('正常') ? 'var(--success)' : 'var(--danger)' }}>
+              {testResult}
+            </div>
+          )}
         </div>
       </div>
     </div>

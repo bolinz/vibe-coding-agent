@@ -17,7 +17,7 @@ export function MessageList({ messages, typingText }: Props) {
   }, [messages, typingText]);
 
   return (
-    <div class="chat-container" id="chat">
+    <div>
       {messages.length === 0 && (
         <div class="message system">新会话已创建，开始对话吧</div>
       )}

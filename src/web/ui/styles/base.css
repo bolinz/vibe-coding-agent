@@ -1,11 +1,8 @@
 @import './variables.css';
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body {
-  height: 100%;
-  overflow: hidden;
-}
+html, body { height: 100%; overflow: hidden; }
 
 body {
   font-family: var(--font);
@@ -14,26 +11,31 @@ body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: var(--text-primary); text-decoration: none; }
+a:hover { color: var(--accent); }
 
-::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 2px;
-  transition: background 0.2s;
-}
-::-webkit-scrollbar-thumb:hover { background: var(--border-default); }
+::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: var(--radius-full); }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-::selection { background: var(--accent-dim); color: var(--text-accent); }
+::selection { background: var(--accent); color: #ffffff; }
 
 input, select, button, textarea { font-family: inherit; font-size: inherit; }
 
-button { cursor: pointer; border: none; background: none; color: inherit; }
-button:disabled { cursor: not-allowed; opacity: 0.5; }
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+button:disabled { cursor: not-allowed; opacity: 0.4; }
 
 input, select {
   background: var(--bg-input);
@@ -42,9 +44,9 @@ input, select {
   border-radius: var(--radius-sm);
   padding: 0.5rem 0.75rem;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.15s;
 }
 input:focus, select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--border-focus);
 }
+input::placeholder { color: var(--text-muted); }

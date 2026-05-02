@@ -1,6 +1,6 @@
 # UI Design Document — Vibe Coding Agent
 
-> Preact + TSX + CSS Variables 重构方案
+> 现代极简风格 — Preact + TSX + Lucide Icons + CSS Variables
 
 ---
 
@@ -8,353 +8,172 @@
 
 | 层 | 选择 | 理由 |
 |---|---|---|
-| 框架 | Preact 10.x | 3KB, React 兼容 API, 无编译依赖 |
-| 语言 | TypeScript (TSX) | 与后端共享类型, 编译期检查 |
-| 构建 | `bun build --target=browser` | 零配置, 输出 ES module |
-| 样式 | CSS Variables + 原生 CSS | 无需 CSS-in-JS, 运行时无开销 |
-| 路由 | 双页面 `/` + `/config` | 完全独立 SPA, 无路由器依赖 |
+| 框架 | Preact 10.x | 3KB, React 兼容 API |
+| 图标 | lucide-preact | 线条图标, tree-shakeable |
+| 语言 | TypeScript (TSX) | 与后端共享类型 |
+| 构建 | `bun build --target=browser` | 零配置, ES module |
+| 样式 | CSS Variables + 原生 CSS | 无运行时开销 |
+| 路由 | 双页面 `/` + `/config` | 完全独立 SPA |
 
 ---
 
-## 2. 页面架构
+## 2. 设计理念
 
-```
-GET /                    → index.html  → bun serve → 浏览器加载 chat.js
-GET /config              → config.html → bun serve → 浏览器加载 config.js
-GET /ui/chat.js          → dist/ui/chat.js    (编译后, ES module)
-GET /ui/config.js        → dist/ui/config.js  (编译后, ES module)
-```
+风格参考: Vercel / Linear / Raycast
 
-两个 SPA 完全独立，不共享 JS bundle。
-
----
-
-## 3. 布局结构
-
-### 3.1 Chat 页面 (`/`)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ HEADER (h: 52px)                                             │
-│  ☰ [toggle]   ◉ [conn]   AI Coding Agent     ❓ 💬 ⚙️    │
-├──────────────┬───────────────────────────────────────────────┤
-│ SIDEBAR      │ CHAT AREA                                     │
-│ (w: 280px)   │                                               │
-│              │  ┌─ Message List ──────────────────────────┐  │
-│ 📋 会话      │  │ user 14:23                             │  │
-│ [+]          │  │ ┌──────────────────────────────────┐  │  │
-│              │  │ │ Hello                           │  │  │
-│ hermes 9a3b  │  │ └──────────────────────────────────┘  │  │
-│ 5 条消息     │  │                                         │  │
-│ 📂 /pro...   │  │ assistant 14:23                        │  │
-│ [echo ▼] 📍  │  │ ┌──────────────────────────────────┐  │  │
-│              │  │ │ Hi! How can I help?              │  │  │
-│ echo 2c1f    │  │ └──────────────────────────────────┘  │  │
-│ 3 条消息     │  │                                         │  │
-│ 📂 /tmp      │  │ ◇ hermes 正在思考... ● ● ●             │  │
-│ [hermes ▼]   │  └───────────────────────────────────────┘  │
-│              │                          [ ↓ ]              │
-│              │  ┌─ Input Bar ──────────────────────────┐  │
-│              │  │  输入消息...          ⏹  [ 发送 ]   │  │
-│              │  └───────────────────────────────────────┘  │
-└──────────────┴───────────────────────────────────────────────┘
-```
-
-### 3.2 Config 页面 (`/config`)
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│ HEADER                                                       │
-│  ← 返回 Chat           ⚙️ 系统配置           🟢 已连接    │
-├───────────┬──────────────────────────────────────────────────┤
-│ NAV       │ CONTENT (scrollable)                             │
-│           │                                                   │
-│ ┌───────┐ │  ┌───────────────────────────────────────────┐   │
-│ │ 🤖   │ │  │ AI 服务配置                              │   │
-│ │  AI   │ │  ├───────────────────────────────────────────┤   │
-│ ├───────┤ │  │ OpenAI Key     [••••••••••••••••••]  👁  │   │
-│ │ ⚙️   │ │  │ Anthropic Key  [••••••••••••••••••]  👁  │   │
-│ │ Agent │ │  └───────────────────────────────────────────┘   │
-│ ├───────┤ │                                                   │
-│ │ 🔗   │ │  ┌───────────────────────────────────────────┐   │
-│ │ 通道  │ │  │ Agent 设置                               │   │
-│ ├───────┤ │  ├───────────────────────────────────────────┤   │
-│ │ 🖥   │ │  │ 默认 Agent    [echo ▼]                    │   │
-│ │ 系统  │ │  │ 工作目录      [/projects/sandbox ✏️]     │   │
-│ └───────┘ │  │ 容器引擎      [docker ▼]                 │   │
-│           │  └───────────────────────────────────────────┘   │
-│           │                                                   │
-│           │  ┌───────────────────────────────────────────┐   │
-│           │  │ GitHub 配置                               │   │
-│           │  ├───────────────────────────────────────────┤   │
-│           │  │ Token     [••••••••••••••••••••••]  👁   │   │
-│           │  │ App ID    [cli_xxxxxxxxxxxx]              │   │
-│           │  │ 密钥      [••••••••••••]            👁   │   │
-│           │  │ HMAC      [••••••••]                👁   │   │
-│           │  │ ◉ 已配置 · [测试连接]                     │   │
-│           │  └───────────────────────────────────────────┘   │
-│           │                                                   │
-│           │  ┌───────────────────────────────────────────┐   │
-│           │  │ 飞书机器人连接                            │   │
-│           │  ├───────────────────────────────────────────┤   │
-│           │  │ ┌─── QR ───┐  ◉ 已连接                    │   │
-│           │  │ │ 160x160 │  App: cli_a965...             │   │
-│           │  │ └──────────┘  [重新扫码] [测试连接]        │   │
-│           │  └───────────────────────────────────────────┘   │
-│           │                                                   │
-│           │  ┌───────────────────────────────────────────┐   │
-│           │  │ 系统配置                                  │   │
-│           │  ├───────────────────────────────────────────┤   │
-│           │  │ 端口     [3000]               ⚠️ 需重启  │   │
-│           │  │ 监听地址 [0.0.0.0]            ⚠️ 需重启  │   │
-│           │  │ Redis    [redis://localhost]  ⚠️ 需重启  │   │
-│           │  └───────────────────────────────────────────┘   │
-├───────────┴──────────────────────────────────────────────────┤
-│ FLOATING ACTION BAR                                          │
-│    [ ↺ 重置为默认 ]                   [ 💾 保存并热加载 ]  │
-└──────────────────────────────────────────────────────────────┘
-```
+| 维度 | 方案 |
+|------|------|
+| 背景 | 白色/浅灰 (`#fafafa` / `#ffffff`) |
+| 强调色 | 纯黑 (`#111827`) |
+| 图标 | Lucide 线条图标 (替换所有 emoji) |
+| 排版 | 大留白、呼吸感、清晰层级 |
+| 气泡 | 纯色背景 + 细边框 (assistant), 黑底白字 (user) |
+| 阴影 | 极轻 (`0 1px 3px rgba(0,0,0,0.06)`) |
 
 ---
 
-## 4. 组件树
-
-### Chat App
-
-```
-App                          ← state: { currentSessionId, sessions, messages, sse, connStatus }
-├── Header
-│   ├── SidebarToggle        ← onClick: toggle sidebar collapsed
-│   ├── ConnDot              ← prop: status ('on'|'ws'|'off')
-│   ├── Title
-│   └── NavLinks             ← <a href="/config">⚙️</a>
-│
-├── Sidebar                  ← prop: collapsed, sessions, currentSessionId
-│   ├── SidebarHeader
-│   │   ├── Title ("📋 会话")
-│   │   └── NewSessionBtn    ← onClick: createSession()
-│   └── SessionList
-│       └── SessionItem[]    ← prop: session, isActive, onClick, onPin, onDelete, onAgentChange, onWDDblclick
-│           ├── SessionName  ← {agentType} {id[:8]} {channelIcons}
-│           ├── SessionMeta  ← {messageCount}条 · {time}
-│           ├── WorkingDir   ← dblclick → <input> → save
-│           ├── AgentSelect  ← <select> onChange → switchAgent
-│           ├── PinBtn       ← onClick → togglePin
-│           └── DelBtn       ← onClick → deleteSession (撤销 toast)
-│
-├── ChatArea                 ← prop: messages, isNearBottom
-│   ├── ScrollBottomBtn      ← visible when !isNearBottom
-│   ├── MessageList
-│   │   ├── MessageBubble[]  ← prop: role, content, timestamp
-│   │   │   ├── Avatar       ← 首字母圆圈 (user=U, assistant=A)
-│   │   │   ├── Content
-│   │   │   └── Timestamp    ← title attr, hover显示
-│   │   ├── SystemMessage    ← 居中灰色文本
-│   │   └── ErrorMessage     ← 红底
-│   └── TypingIndicator      ← prop: statusText
-│       ├── AgentName
-│       └── Dots (3span)
-│
-└── InputBar                 ← prop: onSend, onCancel, isSending, isRunning
-    ├── CancelBtn            ← visible when isRunning
-    ├── TextInput            ← onKeyDown: Enter=send
-    └── SendBtn              ← disabled when isSending, show ⏳
-```
-
-### Config App
-
-```
-App                          ← state: { activeTab, configEntries, feishuConnected }
-├── Header
-│   ├── BackLink             ← <a href="/">← 返回 Chat</a>
-│   └── Title
-│
-├── NavSidebar
-│   └── NavItem[]            ← prop: icon, label, isActive, onClick
-│
-├── Content
-│   ├── ConfigSection[]      ← prop: title, children
-│   │   └── ConfigRow[]      ← prop: label, description, inputType, value, onChange, restartTag
-│   │       ├── Label
-│   │       ├── Description
-│   │       ├── Input/PWInput  ← type=text|password, 👁 toggle
-│   │       └── RestartTag     ← "需重启" badge
-│   ├── ConfigSection(Feishu)
-│   │   └── FeishuCard       ← QR code + status + buttons
-│   └── ConfigSection(GitHub)
-│       └── ConfigRow×4 + Status
-│
-└── ActionBar
-    ├── ResetBtn
-    └── SaveBtn
-```
-
----
-
-## 5. 交互设计
-
-### 5.1 消息动画
-
-```css
-@keyframes msgIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-.message { animation: msgIn 0.2s ease-out; }
-```
-
-### 5.2 Session 切换
-
-```
-点击 session-item
-  → MessageList fadeOut (150ms opacity 0)
-  → loadMessages(sessionId)
-  → MessageList fadeIn (200ms opacity 1)
-```
-
-### 5.3 输入区
-
-```
-Enter              → send()
-Shift+Enter        → 换行 (默认行为)
-发送中:
-  button disabled
-  text = "⏳"
-  input disabled
-完成后:
-  button enabled
-  text = "发送"
-  input enabled, focus
-```
-
-### 5.4 工作目录编辑
-
-```
-dblclick .session-wd
-  → span → input (自动 focus + select)
-  → Enter         → save + re-render
-  → Escape        → cancel + re-render
-  → blur          → save
-```
-
-### 5.5 删除会话 (撤销)
-
-```
-点击 ×
-  → items 灰显 + 撤销 toast "会话 xxx 已关闭 [撤销]"
-  → 3s 内点击撤销 → 取消删除
-  → 3s 超时     → 调 API 删除
-
-CSS: .session-item-deleting { opacity: 0.5; pointer-events: none; }
-```
-
-### 5.6 Config 保存
-
-```
-点击保存
-  → button state = "⏳ 保存中..."
-  → POST /api/config/batch
-  → POST /api/config/reload
-  → button state = "✓ 已保存" (绿色, 2s)
-  → 恢复 "💾 保存配置"
-```
-
----
-
-## 6. CSS 变量主题
+## 3. 颜色方案
 
 ```css
 :root {
-  /* 颜色 */
-  --bg-app:          #0b0b1a;
-  --bg-surface:      #12122a;
-  --bg-elevated:     #1a1a3e;
-  --bg-input:        #0a0a1e;
-  --bg-hover:        rgba(0,217,255,0.04);
-
-  --border-subtle:   rgba(15,52,96,0.35);
-  --border-default:  rgba(15,52,96,0.6);
-
-  --text-primary:    #e8e8f0;
-  --text-secondary:  #9999bb;
-  --text-muted:      #666688;
-  --text-accent:     #61e8ff;
-
-  --accent:          #00d9ff;
-  --accent-glow:     rgba(0,217,255,0.2);
-  --accent-dim:      rgba(0,217,255,0.08);
-  --success:         #34d399;
-  --warning:         #fbbf24;
-  --danger:          #f87171;
-
-  /* 布局 */
-  --sidebar-w:       280px;
-  --header-h:        52px;
-  --input-bar-h:     64px;
-  --radius-sm:       6px;
-  --radius-md:       12px;
-  --radius-lg:       20px;
-
-  /* 阴影 */
-  --shadow-sm:       0 1px 3px rgba(0,0,0,0.4);
-  --shadow-md:       0 4px 12px rgba(0,0,0,0.5);
-  --shadow-lg:       0 8px 32px rgba(0,0,0,0.6);
-
-  /* 字体 */
-  --font:            'Inter', -apple-system, sans-serif;
-  --font-mono:       'JetBrains Mono', 'Fira Code', monospace;
-}
-
-@media (max-width: 768px) {
-  :root {
-    --sidebar-w: 0px;  /* sidebar hidden, overlay */
-    --header-h: 48px;
-  }
+  --bg-app:        #fafafa;
+  --bg-surface:    #ffffff;
+  --bg-elevated:   #f5f5f5;
+  --bg-hover:      #f3f4f6;
+  --border-subtle: #f0f0f0;
+  --border-default:#e5e7eb;
+  --border-focus:  #111827;
+  --text-primary:  #111827;
+  --text-secondary:#6b7280;
+  --text-muted:    #9ca3af;
+  --accent:        #111827;
+  --success:       #10b981;
+  --warning:       #f59e0b;
+  --danger:        #ef4444;
 }
 ```
 
 ---
 
-## 7. 文件清单
+## 4. 图标映射
+
+| 位置 | Emoji (旧) | Lucide (新) |
+|------|------------|-------------|
+| Header toggle | ☰ / ✕ | Menu / X |
+| Header nav | 💬 ⚙️ | MessageCircle / Settings |
+| Sidebar title | 📋 | (纯文字 "Sessions") |
+| Sidebar new | + | Plus |
+| Channel: feishu | 📱 | Smartphone |
+| Channel: web | 🌐 | Globe |
+| Channel: ssh | 💻 | Terminal |
+| Session pin | 📌/📍 | Pin / PinOff |
+| Session delete | × | X |
+| Working dir | (无) | Folder |
+| Scroll bottom | ↓ | ChevronDown |
+| Cancel | ⏹ | Square |
+| Send | 发送 | SendHorizonal |
+| Config nav | 🤖⚙️🔗🖥 | Bot/Settings/Link/Monitor |
+| Password | 👁 | Eye / EyeOff |
+| Save | 💾 | Save |
+| Reset | ↺ | RotateCcw |
+| Feishu status | ◉ | CheckCircle / XCircle |
+| Feishu test | (无) | RefreshCw |
+| Feishu scan | (无) | QrCode |
+
+---
+
+## 5. 布局结构
+
+### 5.1 Chat 页面
+
+```
+┌───────────────────────────────────────────────────────────┐
+│ HEADER (h: 48px, white, bottom border)                    │
+│  [☰]  AI Coding Agent  ●     [💬] [⚙️]                  │
+├───────────┬───────────────────────────────────────────────┤
+│ SIDEBAR   │ CHAT AREA (bg: #fafafa)                       │
+│ (w: 260px)│                                               │
+│           │  ┌─ user ─────────────────────────────────┐  │
+│ SESSIONS  │  │ [U] Hello                          14:23│  │
+│ [+]       │  └────────────────────────────────────────┘  │
+│           │                                               │
+│ opencode  │  ┌─ assistant ────────────────────────────┐  │
+│ 9a3b  5条 │  │ [A] Hi! How can I help?          14:23│  │
+│ /projects │  └────────────────────────────────────────┘  │
+│ [echo ▼]  │                                               │
+│           │  · · ·  正在思考...                            │
+│ echo 2c1f │                          [↓]                  │
+│ 3条       │  ┌─ Input ────────────────────────────────┐  │
+│ /tmp      │  │  [输入消息...]              [发送 →]   │  │
+│ [hermes▼] │  └────────────────────────────────────────┘  │
+└───────────┴───────────────────────────────────────────────┘
+```
+
+### 5.2 Config 页面
+
+```
+┌───────────────────────────────────────────────────────────┐
+│ HEADER                                                     │
+│  ← 返回 Chat    系统配置                                   │
+├─────────┬─────────────────────────────────────────────────┤
+│ NAV     │ CONTENT (scrollable)                            │
+│         │                                                  │
+│ [🤖] AI │  ┌─ AI 服务配置 ─────────────────────────────┐  │
+│ [⚙️]Agent│  │ openai_key     [••••••••••] [👁]         │  │
+│ [🔗]通道 │  │ anthropic_key  [••••••••••] [👁]         │  │
+│ [🖥]系统 │  └──────────────────────────────────────────┘  │
+│         │                                                  │
+│         │  ┌─ 飞书机器人 ──────────────────────────────┐  │
+│         │  │ [QR]  ● 已连接                             │  │
+│         │  │       [测试连接] [重新扫码]                │  │
+│         │  └──────────────────────────────────────────┘  │
+├─────────┴─────────────────────────────────────────────────┤
+│  [↺ 重置]                              [💾 保存配置]     │
+└───────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 6. 文件清单
 
 ```
 src/web/ui/
-├── index.html                    # Chat 入口 (HTML壳)
-├── config.html                   # Config 入口 (HTML壳)
+├── index.html / config.html
 ├── styles/
-│   ├── variables.css             # CSS 变量 + 主题
-│   ├── base.css                  # Reset + 排版 + 滚动条
-│   ├── chat.css                  # Chat 布局 + 组件样式
-│   └── config.css                # Config 布局 + 组件样式
+│   ├── variables.css    # 色板 + 布局 + 字体
+│   ├── base.css         # Reset + 通用
+│   ├── chat.css         # Chat 样式
+│   └── config.css       # Config 样式
 ├── shared/
-│   ├── api.ts                    # 类型化 fetch
-│   ├── types.ts                  # 前端类型
-│   └── utils.ts                  # formatTime, escapeHtml
-├── pages/chat/
-│   ├── App.tsx                   # 根组件
-│   ├── Header.tsx                # 顶栏
-│   ├── Sidebar.tsx               # 侧栏
-│   ├── ChatArea.tsx              # 聊天区
-│   ├── MessageList.tsx           # 消息列表
-│   ├── MessageBubble.tsx         # 消息气泡
-│   ├── InputBar.tsx              # 输入区
-│   └── TypingIndicator.tsx       # 打字指示器
-└── pages/config/
-    ├── App.tsx                   # 根组件
-    ├── Header.tsx                # 顶栏
-    ├── NavSidebar.tsx            # 分类导航
-    ├── ConfigSection.tsx         # 卡片容器
-    ├── ConfigRow.tsx             # 配置项
-    ├── FeishuCard.tsx            # 飞书连接
-    └── ActionBar.tsx             # 操作栏
+│   ├── api.ts           # 类型化 fetch
+│   ├── types.ts         # 前端类型
+│   └── utils.ts         # 工具函数
+└── pages/
+    ├── chat/
+    │   ├── App.tsx
+    │   ├── Header.tsx       # Menu/X + MessageCircle/Settings
+    │   ├── Sidebar.tsx      # Plus/X/Pin/PinOff/Folder + Smartphone/Globe/Terminal
+    │   ├── ChatArea.tsx     # ChevronDown
+    │   ├── MessageList.tsx
+    │   ├── MessageBubble.tsx
+    │   ├── InputBar.tsx     # SendHorizonal/Square
+    │   └── TypingIndicator.tsx
+    └── config/
+        ├── App.tsx
+        ├── Header.tsx       # ArrowLeft
+        ├── NavSidebar.tsx   # Bot/Settings/Link/Monitor
+        ├── ConfigSection.tsx
+        ├── ConfigRow.tsx    # Eye/EyeOff
+        ├── FeishuCard.tsx   # CheckCircle/XCircle/RefreshCw/QrCode
+        └── ActionBar.tsx    # RotateCcw/Save/Check
 ```
 
 ---
 
-## 8. 响应式断点
+## 7. 响应式断点
 
 | 断点 | 行为 |
 |------|------|
-| > 768px | 标准布局, sidebar 280px |
-| ≤ 768px | sidebar 隐藏, hamburger 按钮出现, overlay 展开 |
-| ≤ 480px | header 高度减少, 输入区 padding 缩小 |
+| > 768px | 标准布局, sidebar 260px |
+| ≤ 768px | sidebar 隐藏, hamburger 出现, overlay 展开 |
+| ≤ 480px | header 44px, 输入区 padding 缩小 |

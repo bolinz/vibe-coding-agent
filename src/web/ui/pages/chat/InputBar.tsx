@@ -1,4 +1,5 @@
 import { h } from 'preact';
+import { SendHorizonal, Square } from 'lucide-preact';
 import { useState, useRef } from 'preact/hooks';
 
 interface Props {
@@ -31,7 +32,9 @@ export function InputBar({ onSend, isSending, isRunning, onCancel }: Props) {
     <div class="input-area">
       <div class="input-container">
         {isRunning && (
-          <button id="cancelBtn" onClick={onCancel} title="取消">⏹</button>
+          <button id="cancelBtn" onClick={onCancel} title="取消">
+            <Square size={14} />
+          </button>
         )}
         <input
           ref={inputRef}
@@ -39,12 +42,13 @@ export function InputBar({ onSend, isSending, isRunning, onCancel }: Props) {
           value={text}
           onInput={(e) => setText((e.target as HTMLInputElement).value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入消息... (Enter 发送)"
+          placeholder="输入消息..."
           disabled={isSending}
           autocomplete="off"
         />
         <button id="sendBtn" onClick={handleSend} disabled={isSending || !text.trim()}>
-          {isSending ? '⏳' : '发送'}
+          <SendHorizonal size={14} />
+          {isSending ? '发送中' : '发送'}
         </button>
       </div>
     </div>

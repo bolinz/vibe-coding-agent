@@ -1,4 +1,5 @@
 import { h } from 'preact';
+import { Menu, X, MessageCircle, Settings } from 'lucide-preact';
 
 interface Props {
   connStatus: 'on' | 'ws' | 'off';
@@ -7,19 +8,21 @@ interface Props {
 }
 
 export function Header({ connStatus, sidebarCollapsed, onToggleSidebar }: Props) {
-  const dotColor = connStatus === 'on' ? 'conn-on' : connStatus === 'ws' ? 'conn-ws' : 'conn-off';
+  const dotClass = connStatus === 'on' ? 'conn-on' : connStatus === 'ws' ? 'conn-ws' : 'conn-off';
+  const title = connStatus === 'on' ? 'SSE 已连接' : connStatus === 'ws' ? 'WebSocket 已连接' : '未连接';
+
   return (
     <header class="chat-header">
       <div class="chat-header-title">
-        <button id="sidebarToggle" onClick={onToggleSidebar} style="background:transparent;border:none;color:#9999bb;font-size:1.1rem;padding:0.2rem 0.4rem;border-radius:6px;cursor:pointer;">
-          {sidebarCollapsed ? '☰' : '✕'}
+        <button class="sidebar-toggle" onClick={onToggleSidebar}>
+          {sidebarCollapsed ? <Menu size={18} /> : <X size={18} />}
         </button>
-        <span>🤖 AI Coding Agent</span>
-        <span class={`conn-dot ${dotColor}`} title={connStatus === 'on' ? 'SSE 已连接' : connStatus === 'ws' ? 'WebSocket 已连接' : '未连接'}>●</span>
+        <span>AI Coding Agent</span>
+        <span class={`conn-dot ${dotClass}`} title={title} />
       </div>
       <nav class="chat-header-nav">
-        <a href="/">💬</a>
-        <a href="/config">⚙️</a>
+        <a href="/" title="Chat"><MessageCircle size={16} /></a>
+        <a href="/config" title="配置"><Settings size={16} /></a>
       </nav>
     </header>
   );
