@@ -632,9 +632,11 @@ export class WebServer {
                 });
               }
             } else if (event.type === 'agent.error') {
+              const errData = event.data as any;
+              const errMsg = typeof errData === 'string' ? errData : errData?.error || errData?.message || 'Unknown error';
               send({
                 type: 'error',
-                content: event.data,
+                content: errMsg,
                 timestamp: event.timestamp.toISOString(),
               });
             }
