@@ -160,7 +160,21 @@ agent-framework/
 │   │
 │   ├── web/                  # Web 服务
 │   │   ├── server.ts         # Hono + Bun.serve + SSE
-│   │   └── ui/index.html     # 单页 Web UI
+│   │   └── ui/               # Preact + TSX 前端 (Bun 编译)
+│   │       ├── index.html    # Chat 页面入口壳
+│   │       ├── config.html   # 配置页面入口壳
+│   │       ├── styles/       # CSS 变量主题系统
+│   │       │   ├── variables.css
+│   │       │   ├── base.css
+│   │       │   ├── chat.css
+│   │       │   └── config.css
+│   │       ├── shared/       # 共享层
+│   │       │   ├── api.ts    # 类型化 fetch
+│   │       │   ├── types.ts  # 前端类型
+│   │       │   └── utils.ts  # 工具函数
+│   │       └── pages/
+│   │           ├── chat/     # Chat SPA (8 个组件)
+│   │           └── config/   # Config SPA (7 个组件)
 │   │
 │   └── index.ts              # 入口: 组装所有组件
 │
@@ -429,10 +443,89 @@ test/integration/
 
 ---
 
-## 12. 部署
+## 12. 前端架构 (Preact + TSX)
+
+### 12.1 技术选型
+
+| 层 | 选择 | 理由 |
+|---|---|---|
+| 框架 | Preact 10.x | 3KB, React 兼容 API |
+| 语言 | TypeScript (TSX) | 与后端共享类型 |
+| 构建 | `bun build --target=browser` | 零配置, 输出 ES module |
+| 样式 | CSS Variables + 原生 CSS | 无运行时开销 |
+| 路由 | 双页面 `/` + `/config` | 完全独立 SPA |
+
+### 12.2 页面路由
+
+```
+GET /              → serve index.html → 浏览器加载 chat.js
+GET /config        → serve config.html → 浏览器加载 config.js
+GET /ui/chat.js    → dist/ui/chat.js   (编译后, 43KB)
+GET /ui/config.js  → dist/ui/config.js (编译后, 35KB)
+GET /ui/*.css      → 主题 CSS 文件
+```
+
+### 12.3 组件树
+
+```
+Chat SPA                            Config SPA
+├── App (根组件)                     ├── App (根组件: tab切换+数据加载)
+│   ├── Header                      │   ├── Header (返回链接)
+│   ├── Sidebar                     │   ├── NavSidebar (4分类标签)
+│   │   └── SessionItem[]           │   └── Content
+│   ├── ChatArea                    │       ├── ConfigSection[] (卡片)
+│   │   ├── MessageList             │       │   └── ConfigRow[] (配置项)
+│   │   │   └── MessageBubble[]     │       └── FeishuCard (扫码+测试)
+│   │   └── TypingIndicator         └── ActionBar (浮动保存/重置)
+│   └── InputBar
+```
+
+### 12.4 CSS 变量主题
+
+```css
+:root {
+  --bg-app:          #0b0b1a;
+  --bg-surface:      #12122a;
+  --bg-elevated:     #1a1a3e;
+  --accent:          #00d9ff;
+  --sidebar-w:       280px;
+  --header-h:        52px;
+  --radius-sm:       6px;
+  --radius-md:       12px;
+  --font:            'Inter', -apple-system, sans-serif;
+}
+```
+
+### 12.5 构建
 
 ```bash
-bun run build                          # 构建 dist/index.js
+# 编译前端
+bun build src/web/ui/pages/chat/App.tsx   --outfile=dist/ui/chat.js   --target=browser
+bun build src/web/ui/pages/config/App.tsx --outfile=dist/ui/config.js --target=browser
+cp src/web/ui/styles/*.css dist/ui/
+
+# 编译后端
+bun build src/index.ts --outdir=dist --target=bun
+
+# 或一条命令
+bun run build
+```
+
+### 12.6 服务器路由
+
+```typescript
+// server.ts
+this.app.get('/', (c) => c.html(readFileSync('src/web/ui/index.html')));
+this.app.get('/config', (c) => c.html(readFileSync('src/web/ui/config.html')));
+this.app.get('/ui/*', async (c) => new Response(Bun.file(`dist/${c.req.path}`)));
+```
+
+---
+
+## 13. 部署
+
+```bash
+bun run build                          # 构建全部 (后端 + 前端)
 # 上传到服务器
 bun run dist/index.js                  # 运行
 # 或 Docker

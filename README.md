@@ -28,6 +28,7 @@
 |------|----------|------|
 | **运行时** | Bun 1.3+ | 性能最佳、内置 TS 支持、单 binary |
 | **语言** | TypeScript | AI 生成友好、类型安全 |
+| **前端框架** | Preact + TSX | 3KB, React API, Bun 编译 |
 | **Web 框架** | Hono | 轻量、快速、类型安全 |
 | **会话存储** | Memory / Redis | 开发用 Memory，生产可切换 Redis |
 | **配置存储** | SQLite (bun:sqlite) | 零配置，持久化，XOR 加密 |
@@ -114,51 +115,44 @@ src/
 ├── channels/               # 渠道接入 (开放 string 类型)
 │   ├── types.ts            # Channel / ChannelFactory / ChannelDependencies
 │   ├── feishu/             # 飞书 Sidecar 实现
-│   │   ├── sidecar-channel.ts
-│   │   ├── card-builder.ts     # 7 种卡片构建器
-│   │   ├── menu-state.ts       # 菜单状态机
-│   │   └── factory.ts
 │   ├── websocket/          # Web UI + SSE
 │   ├── ssh/                # SSH 终端
 │   ├── webhook/            # 外部 API webhook
-│   │   ├── channel.ts      # 同步/异步 webhook
-│   │   └── factory.ts
-│   ├── github/             # GitHub App Webhook
-│   │   ├── auth.ts         # Token + App JWT 双认证
-│   │   ├── channel.ts      # Issue/PR 事件 → agent → 回复
-│   │   └── factory.ts
-│   └── mcp/                # MCP Server
-│       ├── channel.ts      # McpServer + SSE Transport
-│       └── factory.ts
+│   ├── github/             # GitHub App Webhook (Token + App JWT)
+│   └── mcp/                # MCP Server (Model Context Protocol)
 │
 ├── agents/                 # Agent 声明式配置 + Pipeline 执行
 │   ├── manager.ts          # AgentManager (name → Agent)
-│   ├── types.ts            # Agent / ContainerConfig / StreamChunk / RuntimeType
+│   ├── types.ts            # Agent / ContainerConfig / StreamChunk
 │   ├── runtime/
-│   │   ├── types.ts        # RuntimeAdapter 接口
-│   │   ├── registry.ts     # RuntimeRegistry (cli / session / container)
 │   │   ├── cli.ts          # CLIRuntime — bun spawn 一次进程
 │   │   ├── session.ts      # SessionRuntime — tmux 持久会话
-│   │   └── container.ts    # ContainerRuntime — Docker/Podman 隔离执行
+│   │   └── container.ts    # ContainerRuntime — Docker/Podman
 │   └── pipeline/
 │       ├── executor.ts     # PipelineEngine — 自动选择运行时
 │       └── tool-loop.ts    # ToolLoop — 多轮 tool calling
 │
-├── tools/                  # 工具集
-│   ├── base.ts / shell.ts / git.ts / file.ts
+├── tools/                  # 工具集 (shell / git / file)
 │
-├── web/                    # Web 服务 + UI
-│   └── server.ts           # Hono + SSE + WS + 全部 API 路由
-│   └── ui/index.html       # 单页 Web UI (深色主题、响应式)
+├── web/
+│   ├── server.ts           # Hono + SSE + WS + API 路由
+│   └── ui/                 # Preact + TSX 前端 (Bun 编译)
+│       ├── index.html      # Chat 页面入口壳
+│       ├── config.html     # 配置页面入口壳
+│       ├── styles/         # CSS 变量主题系统
+│       │   ├── variables.css
+│       │   ├── base.css
+│       │   ├── chat.css
+│       │   └── config.css
+│       ├── shared/         # 共享层
+│       │   ├── api.ts      # 类型化 fetch
+│       │   ├── types.ts    # 前端类型
+│       │   └── utils.ts    # 工具函数
+│       └── pages/
+│           ├── chat/       # Chat SPA (8 个组件)
+│           └── config/     # Config SPA (7 个组件)
 │
-├── index.ts                # 入口: 组装所有组件
-│
-tests/
-├── integration/
-│   ├── sidecar-channel.test.ts
-│   ├── sidecar-rpc.test.ts
-│   └── channels-e2e.test.ts     # 3 新渠道 E2E 测试
-└── ...
+└── index.ts                # 入口: 组装所有组件
 ```
 
 ---
@@ -253,47 +247,26 @@ agentManager.register({
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/` | Chat Web UI (Preact SPA) |
+| GET | `/config` | 配置管理页面 (独立 SPA) |
+| GET | `/ui/*` | 静态资源 (编译后的 JS/CSS) |
 | GET | `/health` | 健康检查 |
-| GET | `/` | Web UI |
-| GET | `/api/sessions` | 会话列表 |
-| POST | `/api/sessions` | 创建会话 |
-| GET/POST | `/api/sessions/:id/working-dir` | 工作目录 |
+| GET/POST | `/api/sessions` | 会话管理 |
 | POST | `/api/chat/:sessionId` | 发送消息 |
 | GET | `/api/chat/:sessionId/sse` | SSE 流 |
 | POST | `/api/chat/:sessionId/cancel` | 取消 |
-| POST | `/api/channels/webhook/:token` | Webhook 入口 |
+| POST | `/api/channels/webhook/:token` | Webhook |
 | POST | `/api/channels/github/webhook` | GitHub Webhook |
-| GET | `/api/channels/mcp/sse` | MCP SSE 连接 |
-| POST | `/api/channels/mcp/message` | MCP 消息 |
-| GET/POST | `/api/config/**` | 配置管理 |
+| GET/POST | `/api/channels/mcp/sse` + `/message` | MCP Server |
 
----
-
-## MCP 工具
-
-| 工具 | 参数 | 说明 |
-|------|------|------|
-| `chat` | `message`, `agent?`, `sessionId?` | 调用 agent |
-| `list_agents` | — | 列出可用 agent |
-| `create_session` | `agent?` | 创建新会话 |
-| `get_session_info` | `sessionId` | 查询会话详情 |
-
-任何支持 MCP 的客户端 (Claude Desktop、Cursor 等) 均可连接：
-
-```
-GET http://<host>:3000/api/channels/mcp/sse
-POST http://<host>:3000/api/channels/mcp/message?sessionId=<id>
-```
-
----
-
-## 开发命令
+## 构建与开发
 
 ```bash
-bun run typecheck   # tsc --noEmit
-bun test            # 75 tests
-bun run build       # bun build → dist/index.js
-bun run start       # 生产运行
+bun run typecheck     # tsc --noEmit
+bun test              # 75 tests
+bun run build:ui      # 仅编译前端 (Chat + Config)
+bun run build         # 编译全部 (后端 + 前端)
+bun run start         # 生产运行
 ```
 
 ---
