@@ -147,6 +147,15 @@ export class SessionManager {
     await this.update(session);
     return session;
   }
+
+  async updateContext(sessionId: string, updates: Partial<SessionContext>): Promise<Session> {
+    const session = await this.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    if (!session.context) session.context = {};
+    Object.assign(session.context, updates);
+    await this.update(session);
+    return session;
+  }
 }
 
 export interface SessionStore {

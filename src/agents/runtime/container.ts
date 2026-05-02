@@ -1,22 +1,19 @@
 import { spawn } from 'bun';
-import type { Agent, StreamChunk } from '../types';
+import type { Agent, ContainerConfig, StreamChunk } from '../types';
 import type { RuntimeAdapter } from './types';
+import { ConfigManager } from '../../core/config';
 
-interface CLISession {
+interface ContainerSession {
   proc: ReturnType<typeof spawn>;
   controller: AbortController;
   agent: Agent;
   workingDir?: string;
 }
 
-/**
- * CLIRuntime — for one-shot CLI tools (claude -p, codex, cline, hermes)
- * Each send() spawns a new process; read() collects stdout.
- */
-export class CLIRuntime implements RuntimeAdapter {
-  readonly type = 'cli' as const;
+export class ContainerRuntime implements RuntimeAdapter {
+  readonly type = 'container' as const;
 
-  private sessions = new Map<string, CLISession>();
+  private sessions = new Map<string, ContainerSession>();
   private agentMap = new Map<string, { agent: Agent; workingDir?: string }>();
 
   async start(sessionId: string, agent: Agent, workingDir?: string): Promise<void> {
@@ -24,7 +21,7 @@ export class CLIRuntime implements RuntimeAdapter {
   }
 
   async stop(_sessionId: string): Promise<void> {
-    // No-op: processes auto-exit when done
+    // No-op: containers auto-exit when done
   }
 
   isRunning(sessionId: string): boolean {
@@ -47,27 +44,24 @@ export class CLIRuntime implements RuntimeAdapter {
 
     const entry = this.agentMap.get(sessionId);
     if (!entry) {
-      throw new Error(`Agent config not set for session ${sessionId}. Call start() first.`);
+      throw new Error(`Container agent not initialized for session ${sessionId}. Call start() first.`);
     }
-    const agent = entry.agent;
-    const workingDir = entry.workingDir;
 
+    const { agent, workingDir } = entry;
+    const cc = agent.config.container;
+    if (!cc) {
+      throw new Error(`Agent ${agent.name} has no container config.`);
+    }
+
+    const config = await this.getContainerCmd();
     const controller = new AbortController();
-    // Support {message} placeholder in args for tools that need message at a specific position
-    const args = (agent.config.args ?? []).map((arg) =>
-      arg === '{message}' ? message : arg
-    );
-    // If no placeholder was used, append message at the end (default behavior)
-    const hasPlaceholder = (agent.config.args ?? []).includes('{message}');
-    const cmd = hasPlaceholder
-      ? [agent.config.command, ...args]
-      : [agent.config.command, ...args, message];
+
+    const dockerArgs = this.buildRunArgs(config, cc, agent, message, workingDir);
 
     try {
       const proc = spawn({
-        cmd,
+        cmd: dockerArgs,
         env: { ...process.env, ...(agent.config.env ?? {}) },
-        cwd: workingDir ?? agent.config.cwd,
         stdout: 'pipe',
         stderr: 'pipe',
         signal: controller.signal,
@@ -75,7 +69,6 @@ export class CLIRuntime implements RuntimeAdapter {
 
       this.sessions.set(sessionId, { proc, controller, agent, workingDir });
     } catch (err) {
-      // Spawn failed (e.g. ENOENT). Store a sentinel so read() can yield the error.
       const errorMsg = err instanceof Error ? err.message : String(err);
       const sentinel = spawn({ cmd: ['echo', ''], stdout: 'pipe', stderr: 'pipe' });
       this.sessions.set(sessionId, {
@@ -84,20 +77,18 @@ export class CLIRuntime implements RuntimeAdapter {
         agent: { ...agent, capabilities: { ...agent.capabilities, streaming: false } },
         workingDir,
       });
-      // We will yield the error in read() instead of here
-      (this.sessions.get(sessionId) as CLISession & { _spawnError?: string })._spawnError = errorMsg;
+      (this.sessions.get(sessionId) as ContainerSession & { _spawnError?: string })._spawnError = errorMsg;
     }
   }
 
   async *read(sessionId: string): AsyncGenerator<StreamChunk> {
     const s = this.sessions.get(sessionId);
     if (!s) {
-      yield { type: 'error', content: `No active CLI session: ${sessionId}` };
+      yield { type: 'error', content: `No active container session: ${sessionId}` };
       return;
     }
 
-    // Check for spawn-time error
-    const spawnError = (s as CLISession & { _spawnError?: string })._spawnError;
+    const spawnError = (s as ContainerSession & { _spawnError?: string })._spawnError;
     if (spawnError) {
       yield { type: 'error', content: spawnError };
       yield { type: 'done' };
@@ -131,8 +122,6 @@ export class CLIRuntime implements RuntimeAdapter {
       const stderrText = stderr ? await new Response(stderr).text() : '';
       const exitCode = await proc.exited;
 
-      // Some CLIs (e.g. hermes) output errors to stdout with non-zero exit code.
-      // Prefer stdout if it has content; otherwise use stderr.
       const outputText = stdoutText.trim() || stderrText.trim();
 
       if (exitCode !== 0 && outputText) {
@@ -161,6 +150,66 @@ export class CLIRuntime implements RuntimeAdapter {
 
   async cleanup(sessionId: string): Promise<void> {
     await this.cancel(sessionId);
-    this.agentMap.delete(sessionId);
+  }
+
+  // ---- private ----
+
+  private async getContainerCmd(): Promise<{ cmd: string }> {
+    const cm = new ConfigManager();
+    const cmd = cm.get('container_cmd') || 'docker';
+    return { cmd };
+  }
+
+  private buildRunArgs(
+    config: { cmd: string },
+    cc: ContainerConfig,
+    agent: Agent,
+    message: string,
+    workingDir?: string,
+  ): string[] {
+    const cmd = cc.cmd || config.cmd;
+    const workDir = cc.workDir || '/workspace';
+    const hostWorkDir = workingDir || agent.config.cwd || process.cwd();
+
+    const args: string[] = [cmd, 'run', '--rm', '-i'];
+
+    // Volume mount: host working dir → container work dir
+    args.push('-v', `${hostWorkDir}:${workDir}`);
+
+    // Set working directory inside container
+    args.push('-w', workDir);
+
+    // Resource limits
+    if (cc.memory) {
+      args.push('--memory', cc.memory);
+    }
+    if (cc.cpu) {
+      args.push('--cpus', cc.cpu);
+    }
+
+    // Network
+    if (cc.networkDisabled) {
+      args.push('--network', 'none');
+    }
+
+    // Image
+    args.push(cc.image);
+
+    // Agent command
+    args.push(agent.config.command);
+
+    // Agent args with {message} support
+    const agentArgs = (agent.config.args ?? []).map((arg) =>
+      arg === '{message}' ? message : arg
+    );
+    args.push(...agentArgs);
+
+    // No {message} placeholder → append message at end
+    const hasPlaceholder = (agent.config.args ?? []).includes('{message}');
+    if (!hasPlaceholder) {
+      args.push(message);
+    }
+
+    return args;
   }
 }

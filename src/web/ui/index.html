@@ -187,6 +187,29 @@
       color: #666;
       margin-top: 0.15rem;
     }
+    .session-item .session-wd {
+      font-size: 0.6rem;
+      color: #555;
+      margin-top: 0.1rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-right: 2px;
+      cursor: text;
+    }
+    .session-item .session-wd:hover { color: #888; }
+    .session-item .session-wd-input {
+      font-size: 0.6rem;
+      margin-top: 0.1rem;
+      background: #1a1a2e;
+      border: 1px solid #0f3460;
+      color: #aaa;
+      border-radius: 3px;
+      padding: 0.1rem 0.3rem;
+      width: 100%;
+      outline: none;
+    }
+    .session-item .session-wd-input:focus { border-color: #00d9ff; }
     .session-item.pinned { border-left-color: #ffc107; }
     .session-item .session-pin {
       position: absolute;
@@ -878,6 +901,7 @@
             '<button class="session-del" data-id="' + s.id + '" title="关闭会话">\u00d7</button>' +
             '<div class="session-name">' + (s.pinned ? '\ud83d\udccc ' : '') + s.agentType + ' ' + s.id.slice(0, 8) + ' <span class="session-channels">' + channels + '</span></div>' +
             '<div class="session-meta">' + s.messageCount + ' 条消息 \u00b7 ' + formatTime(s.createdAt) + '</div>' +
+            '<div class="session-wd" data-id="' + s.id + '" title="点击修改工作目录">' + (s.workingDir || '/projects/sandbox') + '</div>' +
             '<select class="session-agent" data-session="' + s.id + '" title="\u5207\u6362 Agent">' +
             AGENTS.map(a => '<option value="' + a + '"' + (a === s.agentType ? ' selected' : '') + '>' + a + '</option>').join('') +
             '</select>' +
@@ -919,6 +943,39 @@
           toast('已切换至 ' + agent);
         }).catch(errToast);
       }
+    });
+
+    // Working directory inline edit (dblclick → input → save on Enter/blur)
+    sessionList.addEventListener('dblclick', (e) => {
+      const wd = e.target.closest('.session-wd');
+      if (!wd) return;
+      const id = wd.dataset.id;
+      if (!id) return;
+      const current = wd.textContent || '';
+      const input = document.createElement('input');
+      input.className = 'session-wd-input';
+      input.type = 'text';
+      input.value = current;
+      wd.replaceWith(input);
+      input.focus();
+      input.select();
+
+      const save = async () => {
+        const val = input.value.trim() || '/projects/sandbox';
+        try {
+          await apiPost('/sessions/' + id + '/working-dir', { workingDir: val });
+          toast('工作目录已更新');
+        } catch (e) {
+          errToast(e);
+        }
+        renderSessionList();
+      };
+
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); save(); }
+        if (ev.key === 'Escape') { renderSessionList(); }
+      });
+      input.addEventListener('blur', save, { once: true });
     });
 
     // ==================== SESSION OPERATIONS ====================

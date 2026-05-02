@@ -16,6 +16,7 @@ const CONFIG_SCHEMA: Record<string, { category: ConfigEntry['category']; descrip
   anthropic_api_key: { category: 'ai', description: 'Anthropic API Key (用于 Claude)', encrypted: true },
   default_agent: { category: 'agent', description: '默认使用的 Agent', encrypted: false },
   working_dir: { category: 'agent', description: 'Agent 工作目录', encrypted: false },
+  container_cmd: { category: 'agent', description: '容器引擎命令 (docker/podman/nerdctl)', encrypted: false },
   feishu_app_id: { category: 'channel', description: '飞书应用 App ID', encrypted: false },
   feishu_app_secret: { category: 'channel', description: '飞书应用 Secret', encrypted: true },
   feishu_verification_token: { category: 'channel', description: '飞书验证 Token', encrypted: true },

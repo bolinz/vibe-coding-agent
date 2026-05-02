@@ -5,6 +5,7 @@ import type { RuntimeAdapter } from './types';
 interface TmuxSession {
   name: string;
   agent: Agent;
+  workingDir?: string;
 }
 
 /**
@@ -17,7 +18,7 @@ export class SessionRuntime implements RuntimeAdapter {
   private sessions = new Map<string, TmuxSession>();
   private readonly prefix = 'vca'; // vibe-coding-agent
 
-  async start(sessionId: string, agent: Agent): Promise<void> {
+  async start(sessionId: string, agent: Agent, workingDir?: string): Promise<void> {
     const tmuxName = this.tmuxName(sessionId);
 
     // Check if already exists
@@ -25,7 +26,7 @@ export class SessionRuntime implements RuntimeAdapter {
     const exitCode = await check.exited;
     if (exitCode === 0) {
       // Already running
-      this.sessions.set(sessionId, { name: tmuxName, agent });
+      this.sessions.set(sessionId, { name: tmuxName, agent, workingDir });
       return;
     }
 
@@ -34,9 +35,11 @@ export class SessionRuntime implements RuntimeAdapter {
       .map(([k, v]) => `export ${k}=${this.shellEscape(v)}`)
       .join(' && ');
 
+    const cwd = workingDir ?? agent.config.cwd ?? '/projects/sandbox';
+
     const initCmd = [
       'tmux', 'new-session', '-d', '-s', tmuxName,
-      `${envVars ? envVars + ' && ' : ''}cd ${this.shellEscape(agent.config.cwd ?? '/projects/sandbox')} && ${agent.config.command} ${(agent.config.args ?? []).join(' ')}`
+      `${envVars ? envVars + ' && ' : ''}cd ${this.shellEscape(cwd)} && ${agent.config.command} ${(agent.config.args ?? []).join(' ')}`
     ];
 
     const proc = spawn(initCmd);
@@ -49,7 +52,7 @@ export class SessionRuntime implements RuntimeAdapter {
     // Wait for CLI to initialize
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    this.sessions.set(sessionId, { name: tmuxName, agent });
+    this.sessions.set(sessionId, { name: tmuxName, agent, workingDir });
   }
 
   async stop(_sessionId: string): Promise<void> {

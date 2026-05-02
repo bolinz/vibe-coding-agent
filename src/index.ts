@@ -15,6 +15,7 @@ import { AgentManager } from './agents/manager';
 import { RuntimeRegistry } from './agents/runtime/registry';
 import { CLIRuntime } from './agents/runtime/cli';
 import { SessionRuntime } from './agents/runtime/session';
+import { ContainerRuntime } from './agents/runtime/container';
 import { PipelineEngine } from './agents/pipeline/executor';
 import { ShellTool } from './tools/shell';
 import { GitTool } from './tools/git';
@@ -73,6 +74,7 @@ async function main() {
   const runtimeRegistry = new RuntimeRegistry();
   runtimeRegistry.register('cli', new CLIRuntime());
   runtimeRegistry.register('session', new SessionRuntime());
+  runtimeRegistry.register('container', new ContainerRuntime());
 
   const defaultAgent = process.env.DEFAULT_AGENT ?? 'echo';
   const pipeline = new PipelineEngine(agentManager, runtimeRegistry, toolRegistry, {

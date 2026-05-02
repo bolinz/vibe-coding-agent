@@ -113,6 +113,7 @@ export class WebServer {
         state: s.state,
         pinned: s.pinned ?? false,
         participants: s.participants ?? [],
+        workingDir: s.context?.workingDir,
         messageCount: s.messages.length,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
@@ -131,6 +132,7 @@ export class WebServer {
         state: session.state,
         pinned: session.pinned ?? false,
         participants: session.participants ?? [],
+        workingDir: session.context?.workingDir,
         context: session.context,
         messages: session.messages.map((m) => ({
           role: m.role,
@@ -144,14 +146,18 @@ export class WebServer {
     });
 
     api.post('/sessions', async (c) => {
-      const body = await c.req.json() as { userId?: string; agentType?: string };
+      const body = await c.req.json() as { userId?: string; agentType?: string; workingDir?: string };
       const userId = body.userId ?? 'default';
       const agentType = body.agentType ?? this.router.getDefaultAgent();
-      const session = await this.sessionManager.create(userId, agentType, { workingDir: '/projects/sandbox' });
+      const cm = new ConfigManager();
+      const defaultDir = cm.get('working_dir') || '/projects/sandbox';
+      const workingDir = body.workingDir || defaultDir;
+      const session = await this.sessionManager.create(userId, agentType, { workingDir });
       return c.json({
         id: session.id,
         userId: session.userId,
         agentType: session.agentType,
+        workingDir: session.context?.workingDir,
         createdAt: session.createdAt,
       }, 201);
     });
@@ -183,6 +189,22 @@ export class WebServer {
         id: session.id,
         agentType: session.agentType,
       });
+    });
+
+    // Working directory
+    api.get('/sessions/:id/working-dir', async (c) => {
+      const id = c.req.param('id');
+      const session = await this.sessionManager.get(id);
+      if (!session) return c.json({ error: 'Session not found' }, 404);
+      return c.json({ workingDir: session.context?.workingDir || '/projects/sandbox' });
+    });
+
+    api.post('/sessions/:id/working-dir', async (c) => {
+      const id = c.req.param('id');
+      const body = await c.req.json() as { workingDir: string };
+      if (!body.workingDir?.trim()) return c.json({ error: 'workingDir required' }, 400);
+      const session = await this.sessionManager.updateContext(id, { workingDir: body.workingDir.trim() });
+      return c.json({ success: true, workingDir: session.context?.workingDir });
     });
 
     // Agent status

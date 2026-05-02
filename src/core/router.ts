@@ -4,6 +4,7 @@ import type { ToolRegistry } from './registry';
 import { EventBus } from './event';
 import type { AgentManager } from '../agents/manager';
 import { PipelineEngine } from '../agents/pipeline/executor';
+import { ConfigManager } from './config';
 
 export class Router {
   private runningPipelines = new Map<string, AbortController>();
@@ -50,10 +51,12 @@ export class Router {
       }
 
       if (!session) {
+        const cm = new ConfigManager();
+        const defaultDir = cm.get('working_dir') || '/projects/sandbox';
         session = await this.sessionManager.create(
           message.userId,
           this.defaultAgent,
-          { workingDir: '/projects/sandbox' },
+          { workingDir: defaultDir },
           message.sessionId
         );
 
@@ -77,6 +80,9 @@ export class Router {
 
       // 3. Execute via PipelineEngine (handles streaming + tool loops)
       const agentName = session.agentType;
+      const cm = new ConfigManager();
+      const defaultDir = cm.get('working_dir') || '/projects/sandbox';
+      const workingDir = session.context?.workingDir || defaultDir;
       const responseChunks: string[] = [];
       let responseError: string | undefined;
 
@@ -89,6 +95,7 @@ export class Router {
           session.id,
           message.content,
           abortController.signal,
+          workingDir,
         )) {
           if (chunk.type === 'text') {
             responseChunks.push(chunk.content);

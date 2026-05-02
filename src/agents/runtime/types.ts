@@ -1,10 +1,10 @@
 import type { Agent, ExecutionContext, StreamChunk } from '../types';
 
 export interface RuntimeAdapter {
-  readonly type: 'cli' | 'session';
+  readonly type: 'cli' | 'session' | 'container';
 
   /** Start a runtime instance for the given session. Idempotent. */
-  start(sessionId: string, agent: Agent): Promise<void>;
+  start(sessionId: string, agent: Agent, workingDir?: string): Promise<void>;
 
   /** Stop the runtime instance for the given session. */
   stop(sessionId: string): Promise<void>;
