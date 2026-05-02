@@ -150,13 +150,13 @@
       background: none;
       border: none;
       cursor: pointer;
-      font-size: 0.7rem;
-      padding: 0.1rem 0.2rem;
-      opacity: 0;
-      transition: opacity 0.15s;
+      font-size: 0.8rem;
+      padding: 0.2rem 0.3rem;
+      border-radius: 3px;
+      z-index: 1;
+      transition: background 0.15s;
     }
-    .session-item:hover .session-pin { opacity: 0.6; }
-    .session-item .session-pin:hover { opacity: 1; }
+    .session-item .session-pin:hover { background: rgba(255, 193, 7, 0.2); }
     .session-item .session-agent {
       font-size: 0.6rem;
       margin-top: 0.2rem;
@@ -690,58 +690,52 @@
             '<button class="session-pin" data-id="' + s.id + '" data-pinned="' + (s.pinned ? '1' : '0') + '" title="' + (s.pinned ? '\u53d6\u6d88\u4fdd\u5b58' : '\u6c38\u4e45\u4fdd\u5b58') + '">' + (s.pinned ? '\ud83d\udccc' : '\ud83d\udccd') + '</button>' +
             '</div>';
         }).join('');
-
-        list.querySelectorAll('.session-item').forEach(el => {
-          el.addEventListener('click', (e) => {
-            if (e.target.classList.contains('session-del')) return;
-            if (e.target.classList.contains('session-pin')) return;
-            switchSession(el.dataset.id);
-          });
-        });
-        list.querySelectorAll('.session-del').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const id = btn.dataset.id;
-            if (!confirm('\u786e\u5b9a\u5173\u95ed\u6b64\u4f1a\u8bdd\uff1f')) return;
-            await apiDelete('/sessions/' + id);
-            if (id === currentSessionId) {
-              currentSessionId = null;
-              document.getElementById('chat').innerHTML = '';
-            }
-            renderSessionList();
-            if (!currentSessionId) {
-              const s = await loadSessions();
-              if (s.length > 0) await switchSession(s[0].id);
-              else await createNewSession();
-            }
-          });
-        });
-        list.querySelectorAll('.session-agent').forEach(sel => {
-          sel.addEventListener('change', async (e) => {
-            e.stopPropagation();
-            const sessionId = sel.dataset.session;
-            const agent = sel.value;
-            await apiPost('/sessions/' + sessionId + '/switch-agent', { agentType: agent });
-            renderSessionList();
-            toast('\u5df2\u5207\u6362\u81f3 ' + agent);
-          });
-        });
-        list.querySelectorAll('.session-pin').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const id = btn.dataset.id;
-            const pinned = btn.dataset.pinned === '1';
-            if (pinned) {
-              await apiPost('/sessions/' + id + '/unpin');
-            } else {
-              await apiPost('/sessions/' + id + '/pin');
-            }
-            renderSessionList();
-            toast(pinned ? '\u5df2\u53d6\u6d88\u4fdd\u5b58' : '\u5df2\u6c38\u4e45\u4fdd\u5b58');
-          });
-        });
       });
     }
+
+    // Event delegation for sidebar (handles dynamically created elements)
+    document.getElementById('sessionList').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn) {
+        const item = e.target.closest('.session-item');
+        if (item) switchSession(item.dataset.id);
+        return;
+      }
+      const id = btn.dataset.id;
+      if (btn.classList.contains('session-del')) {
+        if (!confirm('\u786e\u5b9a\u5173\u95ed\u6b64\u4f1a\u8bdd\uff1f')) return;
+        apiDelete('/sessions/' + id).then(() => {
+          if (id === currentSessionId) {
+            currentSessionId = null;
+            document.getElementById('chat').innerHTML = '';
+          }
+          renderSessionList();
+          if (!currentSessionId) {
+            loadSessions().then(s => {
+              if (s.length > 0) switchSession(s[0].id);
+              else createNewSession();
+            });
+          }
+        });
+      } else if (btn.classList.contains('session-pin')) {
+        const pinned = btn.dataset.pinned === '1';
+        (pinned ? apiPost('/sessions/' + id + '/unpin') : apiPost('/sessions/' + id + '/pin')).then(() => {
+          renderSessionList();
+          toast(pinned ? '\u5df2\u53d6\u6d88\u4fdd\u5b58' : '\u5df2\u6c38\u4e45\u4fdd\u5b58');
+        });
+      }
+    });
+
+    document.getElementById('sessionList').addEventListener('change', (e) => {
+      if (e.target.classList.contains('session-agent')) {
+        const sessionId = e.target.dataset.session;
+        const agent = e.target.value;
+        apiPost('/sessions/' + sessionId + '/switch-agent', { agentType: agent }).then(() => {
+          renderSessionList();
+          toast('\u5df2\u5207\u6362\u81f3 ' + agent);
+        });
+      }
+    });
 
     async function switchSession(sessionId) {
       currentSessionId = sessionId;
