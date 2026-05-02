@@ -235,6 +235,7 @@ export class FeishuCardBuilder {
               `**Agent:** ${session.agentType}\n` +
               `**状态:** ${session.pinned ? '📌 已保存' : session.state}\n` +
               `**消息数:** ${session.messages.length}\n` +
+              `**工作目录:** ${session.context?.workingDir || '/projects/sandbox'}\n` +
               `**创建时间:** ${session.createdAt.toLocaleString()}`,
           },
         },
@@ -249,8 +250,55 @@ export class FeishuCardBuilder {
             },
             {
               tag: 'button',
+              text: { tag: 'plain_text', content: '📂 更改工作目录' },
+              type: 'default',
+              value: { action: 'set_working_dir' },
+            },
+            {
+              tag: 'button',
               text: { tag: 'plain_text', content: '🔙 返回' },
               type: 'default',
+              value: { action: 'back_to_menu' },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  buildSetWorkingDirCard(currentDir: string): Record<string, unknown> {
+    const presets = [
+      '/projects/sandbox',
+      '/tmp',
+      '/home',
+      '/workspace',
+    ];
+    const buttons = presets.map((p) => ({
+      tag: 'button',
+      text: { tag: 'plain_text', content: p === currentDir ? `✅ ${p}` : p },
+      type: p === currentDir ? 'primary' : 'default',
+      value: { action: 'set_working_dir_pick', path: p },
+    }));
+
+    return {
+      config: { wide_screen_mode: true },
+      header: { title: { tag: 'plain_text', content: '📂 更改工作目录' }, template: 'blue' },
+      elements: [
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `**当前目录:** ${currentDir}\n\n选择一个预设路径，或在聊天中输入:\n\`/workdir /your/path\``,
+          },
+        },
+        {
+          tag: 'action',
+          actions: [
+            ...buttons,
+            {
+              tag: 'button',
+              text: { tag: 'plain_text', content: '🔙 返回' },
+              type: 'danger',
               value: { action: 'back_to_menu' },
             },
           ],

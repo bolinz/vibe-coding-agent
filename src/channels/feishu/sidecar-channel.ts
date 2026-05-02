@@ -240,6 +240,25 @@ export class SidecarFeishuChannel implements Channel {
     console.log(`[FeishuSidecar] Message from ${userId}: ${content.substring(0, 100)}`);
     this.menuState.markInteracted(userId);
 
+    // Handle /workdir command
+    if (content.trim().startsWith('/workdir ')) {
+      const path = content.trim().slice('/workdir '.length).trim();
+      if (path) {
+        try {
+          const sessionId = await this.sessionBinding.get('feishu', userId);
+          if (sessionId) {
+            await this.sessionManager.updateContext(sessionId, { workingDir: path });
+          }
+          await this.sendText(userId, `✅ 工作目录已设为: ${path}`);
+        } catch (e) {
+          await this.sendText(userId, `❌ 设置工作目录失败: ${e instanceof Error ? e.message : '未知错误'}`);
+        }
+      } else {
+        await this.sendText(userId, '用法: `/workdir /your/path`');
+      }
+      return;
+    }
+
     const handled = await this.menuState.handleCommand(userId, content);
     if (handled) return;
 
@@ -407,6 +426,39 @@ export class SidecarFeishuChannel implements Channel {
           card: this.cardBuilder.buildInfoCard(unpinSession),
           toast: { type: 'info', content: '已取消保存' },
         };
+      }
+
+      case 'set_working_dir': {
+        const wdBindingId = await this.sessionBinding.get('feishu', userId);
+        const wdSession = wdBindingId ? await this.sessionManager.get(wdBindingId) : null;
+        const currentDir = wdSession?.context?.workingDir || '/projects/sandbox';
+        return {
+          card: this.cardBuilder.buildSetWorkingDirCard(currentDir),
+          toast: { type: 'info', content: '选择或输入工作目录' },
+        };
+      }
+
+      case 'set_working_dir_pick': {
+        const path = value?.path as string;
+        if (!path) {
+          return { card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()), toast: { type: 'error', content: '无效路径' } };
+        }
+        try {
+          const pickBindingId = await this.sessionBinding.get('feishu', userId);
+          if (pickBindingId) {
+            await this.sessionManager.updateContext(pickBindingId, { workingDir: path });
+          }
+          const updatedSession = pickBindingId ? await this.sessionManager.get(pickBindingId) : null;
+          return {
+            card: this.cardBuilder.buildInfoCard(updatedSession),
+            toast: { type: 'success', content: `工作目录已设为 ${path}` },
+          };
+        } catch (error) {
+          return {
+            card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
+            toast: { type: 'error', content: '设置失败' },
+          };
+        }
       }
 
       case 'back_to_menu':
