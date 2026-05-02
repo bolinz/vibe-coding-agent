@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
 import { api } from '../../shared/api';
 import { ConfigSection } from './ConfigSection';
 import { ConfigRow } from './ConfigRow';
+import { ArrowLeft } from 'lucide-preact';
 import { NavSidebar } from './NavSidebar';
 import { FeishuCard } from './FeishuCard';
 import { ActionBar } from './ActionBar';
@@ -85,7 +86,7 @@ function ConfigApp() {
   return (
     <div class="config-app">
       <header class="config-header">
-        <a href="/" class="back-link">← 返回 Chat</a>
+        <a href="/" class="back-link"><ArrowLeft size={14} /> 返回 Chat</a>
         <h1>系统配置</h1>
       </header>
       <div class="config-body">
@@ -126,7 +127,7 @@ function ConfigApp() {
           } catch {}
         }}
       />
-      <div class="toast" id="config-toast"></div>
+      <div class="config-toast" id="config-toast"></div>
     </div>
   );
 }
