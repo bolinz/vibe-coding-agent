@@ -39,8 +39,15 @@ export interface Session {
   context: SessionContext;
   state: SessionState;
   pinned?: boolean;
+  participants?: Participant[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface Participant {
+  channel: string;
+  userId: string;
+  label?: string;
 }
 
 export type SessionState = 'active' | 'paused' | 'closed';

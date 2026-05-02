@@ -1,4 +1,4 @@
-import type { Session, SessionContext, SessionState, AgentType, UnifiedMessage } from './types';
+import type { Session, SessionContext, SessionState, AgentType, UnifiedMessage, Participant } from './types';
 
 export class SessionManager {
   private sessions: Map<string, Session> = new Map();
@@ -23,10 +23,12 @@ export class SessionManager {
   }
 
   async listAll(): Promise<Session[]> {
-    return Array.from(this.sessions.values());
+    const memory = Array.from(this.sessions.values());
+    if (memory.length > 0) return memory;
+    return [];
   }
 
-  async create(userId: string, agentType: AgentType = 'aider', context: SessionContext = {}, sessionId?: string): Promise<Session> {
+  async create(userId: string, agentType: AgentType = 'aider', context: SessionContext = {}, sessionId?: string, channel?: string): Promise<Session> {
     const session: Session = {
       id: sessionId ?? crypto.randomUUID(),
       userId,
@@ -34,6 +36,7 @@ export class SessionManager {
       messages: [],
       context,
       state: 'active',
+      participants: channel ? [{ channel, userId }] : [],
       createdAt: new Date(),
       updatedAt: new Date()
     };
@@ -44,12 +47,23 @@ export class SessionManager {
     return session;
   }
 
+  async addParticipant(sessionId: string, participant: Participant): Promise<void> {
+    const session = await this.get(sessionId);
+    if (!session) throw new Error(`Session not found: ${sessionId}`);
+    if (!session.participants) session.participants = [];
+    const exists = session.participants.find(
+      (p) => p.channel === participant.channel && p.userId === participant.userId
+    );
+    if (!exists) {
+      session.participants.push(participant);
+      await this.update(session);
+    }
+  }
+
   async get(sessionId: string): Promise<Session | null> {
-    // Try memory first
     const cached = this.sessions.get(sessionId);
     if (cached) return cached;
 
-    // Load from store
     const session = await this.store.load(sessionId);
     if (session) {
       this.sessions.set(sessionId, session);
@@ -63,7 +77,6 @@ export class SessionManager {
         return session;
       }
     }
-    // Fall back to store
     if (this.store.listByUserId) {
       const sessions = await this.store.listByUserId(userId);
       const active = sessions.find((s) => s.state === 'active');
@@ -96,6 +109,15 @@ export class SessionManager {
     const session = await this.get(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
 
+    // Add participant on first message from a channel
+    if (!session.participants) session.participants = [];
+    const exists = session.participants.find(
+      (p) => p.channel === message.channel && p.userId === message.userId
+    );
+    if (!exists) {
+      session.participants.push({ channel: message.channel, userId: message.userId });
+    }
+
     session.messages.push(message);
     await this.update(session);
   }
@@ -127,7 +149,6 @@ export class SessionManager {
   }
 }
 
-// Session store interface (Redis implementation)
 export interface SessionStore {
   save(session: Session): Promise<void>;
   load(sessionId: string): Promise<Session | null>;
@@ -135,7 +156,6 @@ export interface SessionStore {
   listByUserId?(userId: string): Promise<Session[]>;
 }
 
-// In-memory store for development
 export class MemorySessionStore implements SessionStore {
   private sessions: Map<string, Session> = new Map();
 

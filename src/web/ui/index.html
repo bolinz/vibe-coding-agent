@@ -137,6 +137,10 @@
       text-overflow: ellipsis;
       padding-right: 18px;
     }
+    .session-item .session-channels {
+      font-size: 0.65rem;
+      margin-left: 0.3rem;
+    }
     .session-item .session-meta {
       font-size: 0.65rem;
       color: #666;
@@ -653,7 +657,7 @@
     let currentSessionId = localStorage.getItem('sessionId') || null;
 
     async function loadSessions() {
-      const data = await apiGet('/sessions?userId=' + encodeURIComponent(USER_ID));
+      const data = await apiGet('/sessions');
       return data.sessions || [];
     }
 
@@ -680,9 +684,15 @@
         list.innerHTML = sessions.map(s => {
           const active = s.id === currentSessionId ? 'active' : '';
           const pinned = s.pinned ? 'pinned' : '';
+          const channels = (s.participants || []).map(p => {
+            if (p.channel === 'feishu') return '\ud83d\udcf1';
+            if (p.channel === 'websocket') return '\ud83c\udf10';
+            if (p.channel === 'ssh') return '\ud83d\udcbb';
+            return '';
+          }).join(' ');
           return '<div class="session-item ' + active + ' ' + pinned + '" data-id="' + s.id + '">' +
             '<button class="session-del" data-id="' + s.id + '" title="关闭会话">\u00d7</button>' +
-            '<div class="session-name">' + (s.pinned ? '\ud83d\udccc ' : '') + s.agentType + ' ' + s.id.slice(0, 8) + '</div>' +
+            '<div class="session-name">' + (s.pinned ? '\ud83d\udccc ' : '') + s.agentType + ' ' + s.id.slice(0, 8) + ' <span class="session-channels">' + channels + '</span></div>' +
             '<div class="session-meta">' + s.messageCount + ' 条消息 \u00b7 ' + formatTime(s.createdAt) + '</div>' +
             '<select class="session-agent" data-session="' + s.id + '" title="\u5207\u6362 Agent">' +
             AGENTS.map(a => '<option value="' + a + '"' + (a === s.agentType ? ' selected' : '') + '>' + a + '</option>').join('') +

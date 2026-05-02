@@ -90,6 +90,7 @@ export class WebServer {
       try {
         const htmlPath = join(process.cwd(), 'src/web/ui/index.html');
         const html = readFileSync(htmlPath, 'utf-8');
+        c.header('Cache-Control', 'no-cache, no-store, must-revalidate');
         return c.html(html);
       } catch {
         return c.html('<h1>AI Coding Agent</h1><p>UI not found</p>');
@@ -111,6 +112,7 @@ export class WebServer {
         agentType: s.agentType,
         state: s.state,
         pinned: s.pinned ?? false,
+        participants: s.participants ?? [],
         messageCount: s.messages.length,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
@@ -128,6 +130,7 @@ export class WebServer {
         agentType: session.agentType,
         state: session.state,
         pinned: session.pinned ?? false,
+        participants: session.participants ?? [],
         context: session.context,
         messages: session.messages.map((m) => ({
           role: m.role,

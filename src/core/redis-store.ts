@@ -5,6 +5,7 @@ import type { SessionStore } from './session';
 export class RedisSessionStore implements SessionStore {
   private redis: Redis;
   private keyPrefix = 'session:';
+  private bindingPrefix = 'binding:';
 
   constructor(url: string) {
     this.redis = new Redis(url);
@@ -79,6 +80,17 @@ export class RedisSessionStore implements SessionStore {
       }
     } while (cursor !== '0');
     return sessions;
+  }
+
+  async getBinding(channel: string, userId: string): Promise<string | null> {
+    const key = this.bindingPrefix + channel + ':' + userId;
+    const data = await this.redis.get(key);
+    return data;
+  }
+
+  async setBinding(channel: string, userId: string, sessionId: string): Promise<void> {
+    const key = this.bindingPrefix + channel + ':' + userId;
+    await this.redis.set(key, sessionId);
   }
 
   async delete(sessionId: string): Promise<void> {

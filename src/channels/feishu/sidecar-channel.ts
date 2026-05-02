@@ -2,6 +2,7 @@ import type { Channel, ChannelCapabilities, OutgoingMessage } from '../types';
 import type { Router } from '../../core/router';
 import type { SessionManager } from '../../core/session';
 import type { EventBus } from '../../core/event';
+import type { SessionBindingStore } from '../../core/session-binding';
 import { SidecarRPC } from '../../core/sidecar-rpc';
 import { FeishuCardBuilder } from './card-builder';
 import { FeishuMenuStateManager } from './menu-state';
@@ -31,6 +32,7 @@ export class SidecarFeishuChannel implements Channel {
   private menuState: FeishuMenuStateManager;
   private router: Router;
   private eventBus: EventBus;
+  private sessionBinding: SessionBindingStore;
   private loadingMessageIds = new Map<string, string>();
   private unsubscribeEvent: (() => void) | null = null;
   private reconnectAttempts = 0;
@@ -41,11 +43,13 @@ export class SidecarFeishuChannel implements Channel {
     router: Router,
     private sessionManager: SessionManager,
     eventBus: EventBus,
+    sessionBinding: SessionBindingStore,
     config: FeishuConfig,
   ) {
     this.router = router;
     this.config = config;
     this.eventBus = eventBus;
+    this.sessionBinding = sessionBinding;
     this.cardBuilder = new FeishuCardBuilder(router);
     this.menuState = new FeishuMenuStateManager(
       sessionManager,
@@ -111,13 +115,19 @@ export class SidecarFeishuChannel implements Channel {
 
   private subscribeEvents(): void {
     const unsub1 = this.eventBus.subscribe('agent.thinking', (event) => {
-      this.handleThinking(event.sessionId, (event.data as any)?.content);
+      this.resolveFeishuUserId(event.sessionId).then((uid) => {
+        if (uid) this.handleThinking(uid, (event.data as any)?.content);
+      });
     });
     const unsub2 = this.eventBus.subscribe('agent.tool_executing', (event) => {
-      this.handleToolExecuting(event.sessionId, (event.data as any)?.toolName);
+      this.resolveFeishuUserId(event.sessionId).then((uid) => {
+        if (uid) this.handleToolExecuting(uid, (event.data as any)?.toolName);
+      });
     });
     const unsub3 = this.eventBus.subscribe('agent.error', (event) => {
-      this.handleError(event.sessionId, (event.data as any)?.error);
+      this.resolveFeishuUserId(event.sessionId).then((uid) => {
+        if (uid) this.handleError(uid, (event.data as any)?.error);
+      });
     });
     this.unsubscribeEvent = () => { unsub1(); unsub2(); unsub3(); };
   }
@@ -181,11 +191,20 @@ export class SidecarFeishuChannel implements Channel {
   }
 
   async send(sessionId: string, message: OutgoingMessage): Promise<void> {
+    const feishuUserId = await this.resolveFeishuUserId(sessionId);
+    if (!feishuUserId) return;
     if (message.card && this.capabilities.cards) {
-      await this.sendCard(sessionId, message.card);
+      await this.sendCard(feishuUserId, message.card);
     } else {
-      await this.sendText(sessionId, message.text);
+      await this.sendText(feishuUserId, message.text);
     }
+  }
+
+  private async resolveFeishuUserId(sessionId: string): Promise<string | null> {
+    const session = await this.sessionManager.get(sessionId);
+    if (!session?.participants) return null;
+    const feishu = session.participants.find((p) => p.channel === 'feishu');
+    return feishu?.userId ?? null;
   }
 
   // ===== Internal Send =====
@@ -224,10 +243,22 @@ export class SidecarFeishuChannel implements Channel {
     const handled = await this.menuState.handleCommand(userId, content);
     if (handled) return;
 
+    // Get or create session via binding
+    const sessionId = await this.sessionBinding.getOrCreate('feishu', userId, async () => {
+      const session = await this.sessionManager.create(
+        userId,
+        this.router.getDefaultAgent(),
+        { workingDir: '/projects/sandbox' },
+        undefined,
+        'feishu'
+      );
+      return session.id;
+    });
+
     await this.router.route({
       channel: this.type,
       channelId: userId,
-      sessionId: userId,
+      sessionId,
       userId,
       role: 'user',
       content,
@@ -261,7 +292,14 @@ export class SidecarFeishuChannel implements Channel {
     switch (action) {
       case 'new_session':
         try {
-          await this.doNewSession(userId);
+          const newSession = await this.sessionManager.create(
+            userId,
+            this.router.getDefaultAgent(),
+            { workingDir: '/projects/sandbox' },
+            undefined,
+            'feishu'
+          );
+          await this.sessionBinding.set('feishu', userId, newSession.id);
           return {
             card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),
             toast: { type: 'success', content: '已创建新会话' },
@@ -304,12 +342,12 @@ export class SidecarFeishuChannel implements Channel {
       }
 
       case 'switch_session': {
-        const sessions = await this.sessionManager.listByUserId(userId);
-        const current = await this.sessionManager.getByUserId(userId);
+        const sessions = await this.sessionManager.listAll();
+        const bindingId = await this.sessionBinding.get('feishu', userId);
         return {
           card: this.cardBuilder.buildSessionListCard(
             sessions.map((s) => ({ id: s.id, agentType: s.agentType, messageCount: s.messages.length, pinned: s.pinned })),
-            current?.id,
+            bindingId ?? undefined,
           ),
           toast: { type: 'info', content: '请选择会话' },
         };
@@ -324,7 +362,7 @@ export class SidecarFeishuChannel implements Channel {
           };
         }
         try {
-          await this.doSetSession(userId, sessionId);
+          await this.sessionBinding.set('feishu', userId, sessionId);
           const targetSession = await this.sessionManager.get(sessionId);
           return {
             card: this.cardBuilder.buildMenuCard(targetSession?.agentType ?? this.router.getDefaultAgent(), sessionId),
@@ -339,15 +377,17 @@ export class SidecarFeishuChannel implements Channel {
       }
 
       case 'info': {
-        const session = await this.sessionManager.getByUserId(userId);
+        const bindingInfoSessionId = await this.sessionBinding.get('feishu', userId);
+        const infoSession = bindingInfoSessionId ? await this.sessionManager.get(bindingInfoSessionId) : null;
         return {
-          card: this.cardBuilder.buildInfoCard(session),
+          card: this.cardBuilder.buildInfoCard(infoSession),
           toast: { type: 'info', content: '会话信息' },
         };
       }
 
       case 'pin_session': {
-        const pinSession = await this.sessionManager.getByUserId(userId);
+        const pinSessionId = await this.sessionBinding.get('feishu', userId);
+        const pinSession = pinSessionId ? await this.sessionManager.get(pinSessionId) : null;
         if (pinSession) {
           await this.sessionManager.pin(pinSession.id);
         }
@@ -358,7 +398,8 @@ export class SidecarFeishuChannel implements Channel {
       }
 
       case 'unpin_session': {
-        const unpinSession = await this.sessionManager.getByUserId(userId);
+        const unpinSessionId = await this.sessionBinding.get('feishu', userId);
+        const unpinSession = unpinSessionId ? await this.sessionManager.get(unpinSessionId) : null;
         if (unpinSession) {
           await this.sessionManager.unpin(unpinSession.id);
         }
@@ -371,10 +412,10 @@ export class SidecarFeishuChannel implements Channel {
       case 'back_to_menu':
       case 'open_menu': {
         this.menuState.setUserState(userId, 'menu');
-        const session = await this.sessionManager.getByUserId(userId);
-        const currentAgent = session?.agentType ?? this.router.getDefaultAgent();
+        const menuBindingId = await this.sessionBinding.get('feishu', userId);
+        const menuSession = menuBindingId ? await this.sessionManager.get(menuBindingId) : null;
         return {
-          card: this.cardBuilder.buildMenuCard(currentAgent, session?.id),
+          card: this.cardBuilder.buildMenuCard(menuSession?.agentType ?? this.router.getDefaultAgent(), menuBindingId ?? undefined),
           toast: { type: 'info', content: '控制台' },
         };
       }
@@ -392,28 +433,13 @@ export class SidecarFeishuChannel implements Channel {
 
   // ===== Async Side Effects =====
 
-  private async doNewSession(userId: string): Promise<void> {
-    await this.sessionManager.create(
-      userId,
-      this.router.getDefaultAgent(),
-      { workingDir: '/projects/sandbox' },
-    );
-  }
-
   private async doSetAgent(userId: string, agentName: string): Promise<void> {
-    const session = await this.sessionManager.getByUserId(userId);
-    if (session) {
-      await this.sessionManager.switchAgent(session.id, agentName);
+    const bindingId = await this.sessionBinding.get('feishu', userId);
+    if (bindingId) {
+      await this.sessionManager.switchAgent(bindingId, agentName);
     } else {
-      await this.sessionManager.create(userId, agentName, { workingDir: '/projects/sandbox' }, userId);
-    }
-  }
-
-  private async doSetSession(userId: string, sessionId: string): Promise<void> {
-    const session = await this.sessionManager.get(sessionId);
-    if (session) {
-      session.updatedAt = new Date();
-      await this.sessionManager.update(session);
+      const session = await this.sessionManager.create(userId, agentName, { workingDir: '/projects/sandbox' }, undefined, 'feishu');
+      await this.sessionBinding.set('feishu', userId, session.id);
     }
   }
 }

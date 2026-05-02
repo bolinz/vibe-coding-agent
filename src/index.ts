@@ -1,5 +1,6 @@
 import { SessionManager, MemorySessionStore } from './core/session';
 import { RedisSessionStore } from './core/redis-store';
+import { SessionBindingStore } from './core/session-binding';
 import { EventBus } from './core/event';
 import { ToolRegistry, getToolRegistry } from './core/registry';
 import { Router } from './core/router';
@@ -57,6 +58,7 @@ async function main() {
     ? new RedisSessionStore(config.redisUrl)
     : new MemorySessionStore();
   const sessionManager = new SessionManager(sessionStore);
+  const sessionBinding = new SessionBindingStore(config.redisUrl ? sessionStore : undefined);
   const eventBus = new EventBus();
   const toolRegistry = getToolRegistry();
 
@@ -91,7 +93,7 @@ async function main() {
 
   // ===== Channel Manager =====
   const channelManager = new ChannelManager();
-  channelManager.setDependencies({ router, sessionManager, eventBus });
+  channelManager.setDependencies({ router, sessionManager, eventBus, sessionBinding });
 
   // Register factories
   channelManager.registerFactory(new FeishuChannelFactory());

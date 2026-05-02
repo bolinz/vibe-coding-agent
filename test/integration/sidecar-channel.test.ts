@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
 import { SidecarFeishuChannel } from '../../src/channels/feishu/sidecar-channel';
 import { SessionManager, MemorySessionStore } from '../../src/core/session';
+import { SessionBindingStore } from '../../src/core/session-binding';
 import { Router } from '../../src/core/router';
 import { EventBus } from '../../src/core/event';
 import { ToolRegistry } from '../../src/core/registry';
@@ -18,6 +19,7 @@ describe('SidecarFeishuChannel Integration', () => {
     sessionManager = new SessionManager(store);
     const eventBus = new EventBus();
     const toolRegistry = new ToolRegistry();
+    const sessionBinding = new SessionBindingStore();
 
     const agentManager = new AgentManager();
     const runtimeRegistry = new RuntimeRegistry();
@@ -34,7 +36,7 @@ describe('SidecarFeishuChannel Integration', () => {
     const pipeline = new PipelineEngine(agentManager, runtimeRegistry, toolRegistry);
     const router = new Router(sessionManager, agentManager, eventBus, toolRegistry, pipeline, 'echo');
 
-    channel = new SidecarFeishuChannel(router, sessionManager, {
+    channel = new SidecarFeishuChannel(router, sessionManager, eventBus, sessionBinding, {
       appId: 'test',
       appSecret: 'test',
     });

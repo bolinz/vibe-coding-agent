@@ -59,6 +59,7 @@ export class ChannelManager {
     router: import('./router').Router;
     sessionManager: import('./session').SessionManager;
     eventBus: import('./event').EventBus;
+    sessionBinding: import('./session-binding').SessionBindingStore;
   }): void {
     (this as any).__deps = deps;
   }

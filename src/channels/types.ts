@@ -1,6 +1,7 @@
 import type { Router } from '../core/router';
 import type { SessionManager } from '../core/session';
 import type { EventBus } from '../core/event';
+import type { SessionBindingStore } from '../core/session-binding';
 
 // ===== Channel 接口 =====
 
@@ -78,6 +79,7 @@ export interface ChannelDependencies {
   router: Router;
   sessionManager: SessionManager;
   eventBus: EventBus;
+  sessionBinding: SessionBindingStore;
 }
 
 // Bun WebSocket type - compatible with Bun's ServerWebSocket

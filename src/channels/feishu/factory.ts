@@ -14,7 +14,7 @@ export class FeishuChannelFactory implements ChannelFactory {
   };
 
   create(config: Record<string, unknown>, deps: ChannelDependencies): SidecarFeishuChannel {
-    return new SidecarFeishuChannel(deps.router, deps.sessionManager, deps.eventBus, {
+    return new SidecarFeishuChannel(deps.router, deps.sessionManager, deps.eventBus, deps.sessionBinding, {
       appId: config.appId as string,
       appSecret: config.appSecret as string,
       domain: config.domain as 'feishu' | 'lark' | undefined,
