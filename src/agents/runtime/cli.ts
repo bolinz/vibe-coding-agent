@@ -53,20 +53,24 @@ export class CLIRuntime implements RuntimeAdapter {
     const workingDir = entry.workingDir;
 
     const controller = new AbortController();
-    // Support {message} placeholder in args for tools that need message at a specific position
-    const args = (agent.config.args ?? []).map((arg) =>
-      arg === '{message}' ? message : arg
-    );
-    // If no placeholder was used, append message at the end (default behavior)
-    const hasPlaceholder = (agent.config.args ?? []).includes('{message}');
-    const cmd = hasPlaceholder
-      ? [agent.config.command, ...args]
-      : [agent.config.command, ...args, message];
-
     try {
+      // Support {message} placeholder in args for tools that need message at a specific position
+      const args = (agent.config.args ?? []).map((arg) =>
+        arg === '{message}' ? message : arg
+      );
+      // If no placeholder was used, append message at the end (default behavior)
+      const hasPlaceholder = (agent.config.args ?? []).includes('{message}');
+      const cmd = hasPlaceholder
+        ? [agent.config.command, ...args]
+        : [agent.config.command, ...args, message];
+
+      // Ensure common user bin paths in PATH for agents installed via npm/pip
+      const extraPath = [`${process.env.HOME}/.local/bin`, `${process.env.HOME}/.bun/bin`].filter(Boolean).join(':');
+      const envPath = process.env.PATH ? `${extraPath}:${process.env.PATH}` : extraPath;
+
       const proc = spawn({
         cmd,
-        env: { ...process.env, ...(agent.config.env ?? {}) },
+        env: { ...process.env, PATH: envPath, ...(agent.config.env ?? {}) },
         cwd: workingDir ?? agent.config.cwd,
         stdout: 'pipe',
         stderr: 'pipe',
