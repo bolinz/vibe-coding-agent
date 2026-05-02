@@ -14,23 +14,29 @@
       display: flex;
       flex-direction: column;
     }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #0f3460; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #1a4a7a; }
+
     .layout {
       flex: 1;
       display: flex;
       overflow: hidden;
     }
 
-    /* Header & Navigation */
+    /* ========== HEADER ========== */
     .header {
-      background: #16213e;
-      padding: 0.75rem 1rem;
+      background: linear-gradient(135deg, #16213e, #1a1a3e);
+      padding: 0.6rem 1rem;
       border-bottom: 1px solid #0f3460;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      -webkit-app-region: drag;
     }
     .header h1 {
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       color: #00d9ff;
       display: flex;
       align-items: center;
@@ -38,34 +44,59 @@
     }
     .conn-dot {
       font-size: 0.7rem;
-      margin-left: 0.4rem;
+      margin-left: 0.2rem;
       transition: color 0.3s;
     }
     .conn-on { color: #4caf50; }
     .conn-ws { color: #ff9800; }
     .conn-off { color: #f44336; }
 
-    .nav-buttons {
-      display: flex;
-      gap: 0.5rem;
-    }
+    .nav-buttons { display: flex; gap: 0.25rem; }
+
     .nav-btn {
       background: transparent;
-      border: 1px solid #0f3460;
-      color: #aaa;
-      padding: 0.4rem 0.8rem;
+      border: none;
+      color: #666;
+      padding: 0.35rem 0.7rem;
       border-radius: 0.4rem;
       cursor: pointer;
       font-size: 0.9rem;
       transition: all 0.2s;
+      position: relative;
     }
-    .nav-btn:hover, .nav-btn.active {
-      border-color: #00d9ff;
+    .nav-btn:hover {
+      color: #aaa;
+      background: rgba(255,255,255,0.05);
+    }
+    .nav-btn.active {
       color: #00d9ff;
-      background: rgba(0, 217, 255, 0.1);
+      background: rgba(0,217,255,0.08);
+    }
+    .nav-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 2px;
+      background: #00d9ff;
+      border-radius: 1px;
     }
 
-    /* View container */
+    #sidebarToggle {
+      display: none;
+      background: transparent;
+      border: none;
+      color: #aaa;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 0.2rem 0.4rem;
+      border-radius: 0.3rem;
+    }
+    #sidebarToggle:hover { color: #00d9ff; background: rgba(0,217,255,0.1); }
+
+    /* ========== VIEWS ========== */
     .view {
       flex: 1;
       overflow-y: auto;
@@ -73,14 +104,20 @@
     }
     .view.active { display: flex; flex-direction: column; }
 
-    /* ========== SESSION SIDEBAR ========== */
+    /* ========== SIDEBAR ========== */
     .sidebar {
-      width: 240px;
+      width: 280px;
       background: #16213e;
       border-right: 1px solid #0f3460;
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      transition: margin-left 0.25s ease, opacity 0.2s ease;
+    }
+    .sidebar.collapsed {
+      margin-left: -280px;
+      opacity: 0;
+      pointer-events: none;
     }
     .sidebar-header {
       padding: 0.75rem 1rem;
@@ -106,28 +143,32 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      transition: transform 0.15s;
     }
-    .sidebar-header button:hover { background: #00b8d9; }
+    .sidebar-header button:hover { background: #00b8d9; transform: scale(1.1); }
+
     .session-list {
       flex: 1;
       overflow-y: auto;
-      padding: 0.5rem;
+      padding: 0.4rem;
     }
     .session-item {
-      padding: 0.5rem 0.7rem;
-      border-radius: 0.4rem;
+      padding: 0.6rem 0.7rem;
+      border-radius: 0.5rem;
       cursor: pointer;
-      margin-bottom: 0.2rem;
+      margin-bottom: 0.3rem;
       transition: all 0.15s;
       border-left: 3px solid transparent;
       position: relative;
     }
     .session-item:hover {
       background: rgba(0, 217, 255, 0.05);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
     }
     .session-item.active {
       background: rgba(0, 217, 255, 0.1);
       border-left-color: #00d9ff;
+      box-shadow: 0 1px 6px rgba(0,217,255,0.08);
     }
     .session-item .session-name {
       font-size: 0.8rem;
@@ -135,7 +176,7 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      padding-right: 18px;
+      padding-right: 20px;
     }
     .session-item .session-channels {
       font-size: 0.65rem;
@@ -144,13 +185,13 @@
     .session-item .session-meta {
       font-size: 0.65rem;
       color: #666;
-      margin-top: 0.1rem;
+      margin-top: 0.15rem;
     }
     .session-item.pinned { border-left-color: #ffc107; }
     .session-item .session-pin {
       position: absolute;
-      bottom: 0.3rem;
-      right: 0.3rem;
+      bottom: 0.6rem;
+      right: 0.4rem;
       background: none;
       border: none;
       cursor: pointer;
@@ -158,19 +199,20 @@
       padding: 0.2rem 0.3rem;
       border-radius: 3px;
       z-index: 1;
-      transition: background 0.15s;
+      transition: transform 0.2s, background 0.15s;
     }
-    .session-item .session-pin:hover { background: rgba(255, 193, 7, 0.2); }
+    .session-item .session-pin:hover { background: rgba(255, 193, 7, 0.2); transform: scale(1.15); }
     .session-item .session-agent {
       font-size: 0.6rem;
-      margin-top: 0.2rem;
+      margin-top: 0.25rem;
       background: #1a1a2e;
       color: #aaa;
       border: 1px solid #0f3460;
       border-radius: 3px;
-      padding: 0.1rem 0.2rem;
+      padding: 0.12rem 0.3rem;
       cursor: pointer;
       width: 100%;
+      transition: border-color 0.15s;
     }
     .session-item .session-agent:hover { border-color: #00d9ff; }
     .session-item .session-del {
@@ -182,9 +224,9 @@
       color: #555;
       cursor: pointer;
       font-size: 0.75rem;
-      padding: 0.1rem 0.3rem;
+      padding: 0.15rem 0.35rem;
       opacity: 0;
-      transition: opacity 0.15s;
+      transition: opacity 0.15s, color 0.15s, background 0.15s;
       border-radius: 3px;
     }
     .session-item:hover .session-del { opacity: 1; }
@@ -211,11 +253,9 @@
       max-width: 480px;
       width: 100%;
       text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.3);
     }
-    .welcome-card .icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
-    }
+    .welcome-card .icon { font-size: 3rem; margin-bottom: 1rem; }
     .welcome-card h2 {
       font-size: 1.5rem;
       margin-bottom: 0.5rem;
@@ -263,10 +303,12 @@
       border-radius: 0.4rem;
       color: #eee;
       font-size: 0.95rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .quick-config input:focus, .quick-config select:focus {
       outline: none;
       border-color: #00d9ff;
+      box-shadow: 0 0 0 3px rgba(0,217,255,0.15);
     }
 
     .btn-primary {
@@ -279,9 +321,10 @@
       font-weight: 600;
       font-size: 1rem;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, transform 0.1s;
     }
     .btn-primary:hover { background: #00b8d9; }
+    .btn-primary:active { transform: scale(0.98); }
     .btn-secondary {
       width: 100%;
       padding: 0.6rem;
@@ -291,6 +334,7 @@
       border-radius: 0.5rem;
       margin-top: 0.75rem;
       cursor: pointer;
+      transition: all 0.2s;
     }
     .btn-secondary:hover { color: #eee; border-color: #666; }
 
@@ -301,7 +345,8 @@
       padding: 1rem;
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 0.75rem;
+      scroll-behavior: smooth;
     }
     .message {
       max-width: 80%;
@@ -310,16 +355,23 @@
       line-height: 1.5;
       white-space: pre-wrap;
       word-break: break-word;
+      animation: msgIn 0.2s ease;
+    }
+    @keyframes msgIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     .message.user {
-      background: #0f3460;
+      background: linear-gradient(135deg, #0f3460, #0f3a6a);
       align-self: flex-end;
       border-bottom-right-radius: 0.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
     }
     .message.assistant {
-      background: #16213e;
+      background: linear-gradient(135deg, #16213e, #1a1a3e);
       align-self: flex-start;
       border-bottom-left-radius: 0.25rem;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
     }
     .message.system {
       background: transparent;
@@ -338,6 +390,7 @@
       gap: 0.3rem;
       padding: 0.7rem 1rem;
       align-items: center;
+      animation: msgIn 0.2s ease;
     }
     .typing .typing-dots {
       display: flex;
@@ -362,62 +415,134 @@
       0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
       30% { opacity: 1; transform: translateY(-4px); }
     }
-    .typing span {
-      width: 8px; height: 8px;
-      background: #00d9ff;
+
+    /* ========== SCROLL TO BOTTOM ========== */
+    #scrollBottomBtn {
+      position: absolute;
+      bottom: 0.5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #16213e;
+      border: 1px solid #0f3460;
+      color: #aaa;
+      width: 36px;
+      height: 36px;
       border-radius: 50%;
-      animation: typing 1s infinite;
+      cursor: pointer;
+      font-size: 1rem;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      z-index: 10;
     }
-    .typing span:nth-child(2) { animation-delay: 0.2s; }
-    .typing span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes typing {
-      0%, 100% { opacity: 0.3; transform: translateY(0); }
-      50% { opacity: 1; transform: translateY(-4px); }
+    #scrollBottomBtn:hover {
+      background: #1a1a3e;
+      color: #00d9ff;
+      border-color: #00d9ff;
     }
+    #scrollBottomBtn.visible { display: flex; }
+
+    /* ========== INPUT AREA ========== */
     .input-area {
-      padding: 1rem;
+      padding: 0.75rem 1rem;
       background: #16213e;
       border-top: 1px solid #0f3460;
+      position: relative;
     }
     .input-container {
       display: flex;
       gap: 0.5rem;
       max-width: 800px;
       margin: 0 auto;
+      align-items: center;
     }
     .input-container input {
       flex: 1;
-      padding: 0.75rem 1rem;
+      padding: 0.7rem 1rem;
       background: #1a1a2e;
       border: 1px solid #0f3460;
       border-radius: 0.5rem;
       color: #eee;
       font-size: 1rem;
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
     .input-container input:focus {
       outline: none;
       border-color: #00d9ff;
+      box-shadow: 0 0 0 3px rgba(0,217,255,0.1);
     }
     .input-container button {
-      background: #00d9ff;
       border: none;
-      color: #1a1a2e;
-      padding: 0.5rem 1rem;
-      border-radius: 0 0.4rem 0.4rem 0;
       cursor: pointer;
-      font-weight: 600;
       font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    #sendBtn {
+      background: #00d9ff;
+      color: #1a1a2e;
+      padding: 0.7rem 1.2rem;
+      border-radius: 0.5rem;
+    }
+    #sendBtn:hover:not(:disabled) { background: #00b8d9; }
+    #sendBtn:disabled {
+      background: #555;
+      color: #888;
+      cursor: not-allowed;
+    }
+    #sendBtn.loading {
+      background: #0f3460;
+      color: #00d9ff;
     }
     #cancelBtn {
-      background: #f44336;
-      color: #fff;
-      border-radius: 0;
-      font-weight: bold;
-      padding: 0.5rem 0.8rem;
+      background: rgba(244,67,54,0.15);
+      color: #ff6b6b;
+      padding: 0.7rem 0.7rem;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
     }
-    #cancelBtn:hover { background: #d32f2f; }
-    .input-container button:hover { background: #00b8d9; }
-    .input-container button:disabled { background: #555; cursor: not-allowed; }
+    #cancelBtn:hover { background: rgba(244,67,54,0.25); }
+
+    /* ========== TOAST ========== */
+    .toast {
+      position: fixed;
+      top: 1rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: #16213e;
+      border: 1px solid #0f3460;
+      color: #eee;
+      padding: 0.6rem 1.2rem;
+      border-radius: 0.5rem;
+      font-size: 0.85rem;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 200;
+      transition: all 0.3s;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast-undo {
+      background: #00d9ff;
+      color: #1a1a2e;
+      border: none;
+      padding: 0.2rem 0.5rem;
+      border-radius: 0.3rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      pointer-events: auto;
+      transition: background 0.15s;
+    }
+    .toast-undo:hover { background: #00b8d9; }
 
     /* ========== CONFIG PAGE ========== */
     .config-page {
@@ -426,9 +551,7 @@
       margin: 0 auto;
       width: 100%;
     }
-    .config-section {
-      margin-bottom: 2rem;
-    }
+    .config-section { margin-bottom: 2rem; }
     .config-section h3 {
       font-size: 1rem;
       color: #00d9ff;
@@ -467,9 +590,7 @@
       outline: none;
       border-color: #00d9ff;
     }
-    .config-row input[type="password"] {
-      font-family: monospace;
-    }
+    .config-row input[type="password"] { font-family: monospace; }
     .config-row .toggle-vis {
       background: transparent;
       border: none;
@@ -506,37 +627,32 @@
     .btn-reset { background: transparent; color: #aaa; border: 1px solid #0f3460; }
     .btn-reset:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
-    .toast {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background: #16213e;
-      border: 1px solid #00d9ff;
-      color: #00d9ff;
-      padding: 0.75rem 1.25rem;
-      border-radius: 0.5rem;
-      font-size: 0.9rem;
-      opacity: 0;
-      transform: translateY(20px);
-      transition: all 0.3s;
-      pointer-events: none;
-      z-index: 100;
-    }
-    .toast.show {
-      opacity: 1;
-      transform: translateY(0);
+    /* ========== RESPONSIVE ========== */
+    @media (max-width: 768px) {
+      .sidebar { width: 240px; }
+      .sidebar.collapsed { margin-left: -240px; }
+      #sidebarToggle { display: inline-flex; }
+      .header h1 { font-size: 0.95rem; }
+      .message { max-width: 90%; }
+      .config-page { padding: 1rem; }
+      .config-row { flex-direction: column; align-items: stretch; gap: 0.3rem; }
+      .config-row label { width: auto; }
+      .welcome-card { padding: 1.5rem; }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1><span>🤖</span> AI Coding Agent <span id="connStatus" class="conn-dot conn-off" title="未连接">●</span></h1>
-    <div class="nav-buttons">
-      <button class="nav-btn" data-view="welcome" title="欢迎">❓</button>
-      <button class="nav-btn active" data-view="chat" title="聊天">💬</button>
-      <button class="nav-btn" data-view="config" title="设置">⚙️</button>
+    <div class="header">
+      <h1>
+        <button id="sidebarToggle" title="切换侧栏">☰</button>
+        <span>🤖</span> AI Coding Agent <span id="connStatus" class="conn-dot conn-off" title="未连接">●</span>
+      </h1>
+      <div class="nav-buttons">
+        <button class="nav-btn" data-view="welcome" title="欢迎">❓</button>
+        <button class="nav-btn active" data-view="chat" title="聊天">💬</button>
+        <button class="nav-btn" data-view="config" title="设置">⚙️</button>
+      </div>
     </div>
-  </div>
 
   <div class="view welcome-page" id="view-welcome">
     <div class="welcome-card">
@@ -581,10 +697,11 @@
       </div>
       <div class="chat-area">
         <div class="chat-container" id="chat"></div>
+        <button id="scrollBottomBtn" title="滚动到底部">↓</button>
         <div class="input-area">
           <div class="input-container">
-            <input type="text" id="messageInput" placeholder="输入消息..." autocomplete="off">
-            <button id="cancelBtn" style="display:none" title="取消当前请求">✕</button>
+            <button id="cancelBtn" style="display:none" title="取消当前请求">⏹</button>
+            <input type="text" id="messageInput" placeholder="输入消息... (Enter 发送)" autocomplete="off">
             <button id="sendBtn">发送</button>
           </div>
         </div>
@@ -603,13 +720,47 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    // ==================== CONSTANTS ====================
+    const API = '/api';
+    const AGENTS = ['echo', 'opencode', 'hermes', 'claude', 'codex', 'cline', 'aider'];
+
+    // ==================== STATE ====================
+    const state = {
+      currentSessionId: localStorage.getItem('sessionId') || null,
+      sse: null,
+      wsFallback: null,
+      useSSE: true,
+      cachedSessions: [],
+      lastSessionsFetch: 0,
+      sessionsFetching: false,
+      sending: false,
+      reconnectDelay: 1000,
+      sidebarOpen: true,
+    };
+
+    const USER_ID = localStorage.getItem('userId') ||
+      (crypto.randomUUID ? crypto.randomUUID() : 'user_' + Math.random().toString(36).substring(2, 8));
+    localStorage.setItem('userId', USER_ID);
+
+    // ==================== DOM REFS ====================
+    const $ = (id) => document.getElementById(id);
+    const chat = $('chat');
+    const input = $('messageInput');
+    const sendBtn = $('sendBtn');
+    const cancelBtn = $('cancelBtn');
+    const sessionList = $('sessionList');
+    const connDot = $('connStatus');
+    const toastEl = $('toast');
+    const scrollBtn = $('scrollBottomBtn');
+
     // ==================== ROUTING ====================
     function showView(name) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('view-' + name).classList.add('active');
+      $('view-' + name).classList.add('active');
       document.querySelector('.nav-btn[data-view="' + name + '"]').classList.add('active');
       location.hash = '#/' + name;
+      if (name === 'chat') setTimeout(() => chat.scrollTop = chat.scrollHeight, 50);
     }
 
     document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -624,65 +775,98 @@
     }
 
     // ==================== TOAST ====================
-    function toast(msg) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
-      el.classList.add('show');
-      setTimeout(() => el.classList.remove('show'), 2500);
+    let toastTimer = null;
+    function toast(msg, duration = 2500) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), duration);
+    }
+
+    function toastWithUndo(msg, onUndo) {
+      toastEl.innerHTML = msg + ' <button class="toast-undo">撤销</button>';
+      toastEl.classList.add('show');
+      const undoBtn = toastEl.querySelector('.toast-undo');
+      undoBtn.addEventListener('click', () => {
+        toastEl.classList.remove('show');
+        onUndo();
+      }, { once: true });
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3000);
+    }
+
+    function hideToast() {
+      toastEl.classList.remove('show');
+      clearTimeout(toastTimer);
+    }
+
+    function errToast(err) {
+      toast('错误: ' + (err.message || err), 4000);
     }
 
     // ==================== API ====================
     async function apiGet(path) {
-      const res = await fetch('/api' + path);
+      const res = await fetch(API + path);
+      if (!res.ok) throw new Error('GET ' + path + ' failed: ' + res.status);
       return res.json();
     }
     async function apiPost(path, body) {
-      const res = await fetch('/api' + path, {
+      const res = await fetch(API + path, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
+      if (!res.ok) throw new Error('POST ' + path + ' failed: ' + res.status);
       return res.json();
     }
     async function apiDelete(path) {
-      const res = await fetch('/api' + path, { method: 'DELETE' });
+      const res = await fetch(API + path, { method: 'DELETE' });
+      if (!res.ok) throw new Error('DELETE ' + path + ' failed: ' + res.status);
       return res.json();
     }
 
-    // ==================== SESSION MANAGEMENT ====================
-    const USER_ID = localStorage.getItem('userId') ||
-      (crypto.randomUUID ? crypto.randomUUID() : 'user_' + Math.random().toString(36).substring(2, 8));
-    localStorage.setItem('userId', USER_ID);
-
-    let currentSessionId = localStorage.getItem('sessionId') || null;
-
-    async function loadSessions() {
-      const data = await apiGet('/sessions');
-      return data.sessions || [];
+    // ==================== CONNECTION STATUS ====================
+    function updateConnStatus() {
+      if (!connDot) return;
+      if (state.sse && state.sse.readyState === EventSource.OPEN) {
+        connDot.className = 'conn-dot conn-on';
+        connDot.title = 'SSE 已连接';
+      } else if (state.wsFallback && state.wsFallback.readyState === WebSocket.OPEN) {
+        connDot.className = 'conn-dot conn-ws';
+        connDot.title = 'WebSocket 已连接';
+      } else {
+        connDot.className = 'conn-dot conn-off';
+        connDot.title = '未连接';
+      }
     }
 
-    async function initChat() {
-      const sessions = await loadSessions();
-      if (!currentSessionId || !sessions.find(s => s.id === currentSessionId)) {
-        if (sessions.length > 0) {
-          await switchSession(sessions[0].id);
-        } else {
-          await createNewSession();
-        }
-      } else {
-        renderSessionList();
-        await loadMessages(currentSessionId);
-        reconnectSSE();
+    // ==================== SESSION LIST ====================
+    async function loadSessions(force) {
+      const now = Date.now();
+      if (!force && state.cachedSessions.length > 0 && now - state.lastSessionsFetch < 5000) {
+        return state.cachedSessions;
+      }
+      if (state.sessionsFetching) return state.cachedSessions;
+      state.sessionsFetching = true;
+      try {
+        const data = await apiGet('/sessions');
+        state.cachedSessions = data.sessions || [];
+        state.lastSessionsFetch = now;
+        return state.cachedSessions;
+      } catch (e) {
+        console.warn('loadSessions failed:', e);
+        return state.cachedSessions;
+      } finally {
+        state.sessionsFetching = false;
       }
     }
 
     function renderSessionList() {
-      const list = document.getElementById('sessionList');
-      if (!list) return;
+      if (!sessionList) return;
       loadSessions().then(sessions => {
         sessions.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-        list.innerHTML = sessions.map(s => {
-          const active = s.id === currentSessionId ? 'active' : '';
+        sessionList.innerHTML = sessions.map(s => {
+          const active = s.id === state.currentSessionId ? 'active' : '';
           const pinned = s.pinned ? 'pinned' : '';
           const channels = (s.participants || []).map(p => {
             if (p.channel === 'feishu') return '\ud83d\udcf1';
@@ -700,11 +884,18 @@
             '<button class="session-pin" data-id="' + s.id + '" data-pinned="' + (s.pinned ? '1' : '0') + '" title="' + (s.pinned ? '\u53d6\u6d88\u4fdd\u5b58' : '\u6c38\u4e45\u4fdd\u5b58') + '">' + (s.pinned ? '\ud83d\udccc' : '\ud83d\udccd') + '</button>' +
             '</div>';
         }).join('');
-      });
+      }).catch(e => console.warn('renderSessionList error:', e));
     }
 
-    // Event delegation for sidebar (handles dynamically created elements)
-    document.getElementById('sessionList').addEventListener('click', (e) => {
+    // Background session list refresh every 5s
+    setInterval(() => {
+      if (document.querySelector('.view.active#view-chat') || document.querySelector('#view-chat.active')) {
+        loadSessions(true).then(() => renderSessionList());
+      }
+    }, 5000);
+
+    // ==================== SIDEBAR EVENTS (delegation) ====================
+    sessionList.addEventListener('click', (e) => {
       const btn = e.target.closest('button');
       if (!btn) {
         const item = e.target.closest('.session-item');
@@ -713,69 +904,101 @@
       }
       const id = btn.dataset.id;
       if (btn.classList.contains('session-del')) {
-        if (!confirm('\u786e\u5b9a\u5173\u95ed\u6b64\u4f1a\u8bdd\uff1f')) return;
-        apiDelete('/sessions/' + id).then(() => {
-          if (id === currentSessionId) {
-            currentSessionId = null;
-            document.getElementById('chat').innerHTML = '';
-          }
-          renderSessionList();
-          if (!currentSessionId) {
-            loadSessions().then(s => {
-              if (s.length > 0) switchSession(s[0].id);
-              else createNewSession();
-            });
-          }
-        });
+        deleteSession(id, btn);
       } else if (btn.classList.contains('session-pin')) {
-        const pinned = btn.dataset.pinned === '1';
-        (pinned ? apiPost('/sessions/' + id + '/unpin') : apiPost('/sessions/' + id + '/pin')).then(() => {
-          renderSessionList();
-          toast(pinned ? '\u5df2\u53d6\u6d88\u4fdd\u5b58' : '\u5df2\u6c38\u4e45\u4fdd\u5b58');
-        });
+        togglePin(id, btn);
       }
     });
 
-    document.getElementById('sessionList').addEventListener('change', (e) => {
+    sessionList.addEventListener('change', (e) => {
       if (e.target.classList.contains('session-agent')) {
         const sessionId = e.target.dataset.session;
         const agent = e.target.value;
         apiPost('/sessions/' + sessionId + '/switch-agent', { agentType: agent }).then(() => {
           renderSessionList();
-          toast('\u5df2\u5207\u6362\u81f3 ' + agent);
-        });
+          toast('已切换至 ' + agent);
+        }).catch(errToast);
       }
     });
 
+    // ==================== SESSION OPERATIONS ====================
+    async function deleteSession(id, btn) {
+      const name = btn.closest('.session-item')?.querySelector('.session-name')?.textContent || id.slice(0, 8);
+      toastWithUndo('会话 ' + name + ' 已关闭', async () => {
+        toast('已撤销关闭');
+        renderSessionList();
+      });
+      try {
+        await apiDelete('/sessions/' + id);
+        if (id === state.currentSessionId) {
+          state.currentSessionId = null;
+          localStorage.removeItem('sessionId');
+          chat.innerHTML = '';
+        }
+        renderSessionList();
+        if (!state.currentSessionId) {
+          const sessions = await loadSessions(true);
+          if (sessions.length > 0) switchSession(sessions[0].id);
+          else createNewSession();
+        }
+      } catch (e) {
+        hideToast();
+        errToast(e);
+      }
+    }
+
+    async function togglePin(id, btn) {
+      const pinned = btn.dataset.pinned === '1';
+      try {
+        await (pinned ? apiPost('/sessions/' + id + '/unpin') : apiPost('/sessions/' + id + '/pin'));
+        renderSessionList();
+        toast(pinned ? '已取消保存' : '已永久保存');
+        btn.dataset.pinned = pinned ? '0' : '1';
+      } catch (e) {
+        errToast(e);
+      }
+    }
+
     async function switchSession(sessionId) {
-      currentSessionId = sessionId;
+      state.currentSessionId = sessionId;
       localStorage.setItem('sessionId', sessionId);
+      saveInputDraft();
       renderSessionList();
       reconnectSSE();
       await loadMessages(sessionId);
+      restoreInputDraft();
     }
 
     async function createNewSession() {
-      const data = await apiPost('/sessions', { userId: USER_ID });
-      currentSessionId = data.id;
-      localStorage.setItem('sessionId', data.id);
-      document.getElementById('chat').innerHTML = '';
-      addMessage('system', '\u65b0\u4f1a\u8bdd\u5df2\u521b\u5efa');
-      renderSessionList();
-      reconnectSSE();
-      toast('\u65b0\u4f1a\u8bdd\u5df2\u521b\u5efa');
+      try {
+        const data = await apiPost('/sessions', { userId: USER_ID });
+        state.currentSessionId = data.id;
+        localStorage.setItem('sessionId', data.id);
+        chat.innerHTML = '';
+        addMessage('system', '新会话已创建，开始对话吧');
+        renderSessionList();
+        reconnectSSE();
+        toast('新会话已创建');
+        input.value = '';
+      } catch (e) {
+        errToast(e);
+      }
     }
 
     async function loadMessages(sessionId) {
-      const data = await apiGet('/sessions/' + sessionId);
-      const chat = document.getElementById('chat');
-      chat.innerHTML = '';
-      if (data.messages && data.messages.length > 0) {
-        for (const m of data.messages) {
-          addMessage(m.role, m.content);
+      try {
+        const data = await apiGet('/sessions/' + sessionId);
+        chat.innerHTML = '';
+        if (data.messages && data.messages.length > 0) {
+          for (const m of data.messages) {
+            addMessage(m.role, m.content);
+          }
+        } else {
+          addMessage('system', '新会话已创建，开始对话吧');
         }
-      } else {
-        addMessage('system', '\u65b0\u4f1a\u8bdd\u5df2\u521b\u5efa\uff0c\u5f00\u59cb\u5bf9\u8bdd\u5427');
+      } catch (e) {
+        chat.innerHTML = '';
+        addMessage('error', '加载消息失败: ' + (e.message || e));
       }
     }
 
@@ -785,105 +1008,65 @@
         String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
     }
 
-    document.getElementById('newSessionBtn').addEventListener('click', createNewSession);
+    // ==================== INPUT DRAFT ====================
+    function saveInputDraft() {
+      const prevId = localStorage.getItem('sessionId');
+      if (prevId && input.value) {
+        localStorage.setItem('draft_' + prevId, input.value);
+      }
+    }
 
-    document.getElementById('cancelBtn').addEventListener('click', async () => {
-      if (!currentSessionId) return;
-      await fetch('/api/chat/' + currentSessionId + '/cancel', { method: 'POST' });
-      removeTyping();
-      addMessage('system', '已取消');
+    function restoreInputDraft() {
+      const draft = localStorage.getItem('draft_' + state.currentSessionId);
+      input.value = draft || '';
+    }
+
+    // Save draft on input change (debounced)
+    let draftTimer = null;
+    input.addEventListener('input', () => {
+      clearTimeout(draftTimer);
+      draftTimer = setTimeout(saveInputDraft, 1000);
+    });
+
+    // ==================== SIDEBAR TOGGLE ====================
+    $('sidebarToggle').addEventListener('click', () => {
+      state.sidebarOpen = !state.sidebarOpen;
+      document.querySelector('.sidebar').classList.toggle('collapsed', !state.sidebarOpen);
     });
 
     // ==================== CHAT ====================
-    const chat = document.getElementById('chat');
-    const input = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendBtn');
-    let sse = null;
-    let wsFallback = null;
-    let useSSE = true;
-    let refreshingList = false;
-    let cancelBtn = null;
-    const AGENTS = ['echo', 'opencode', 'hermes', 'claude', 'codex', 'cline', 'aider'];
-
-    function updateConnStatus() {
-      const dot = document.getElementById('connStatus');
-      if (!dot) return;
-      if (sse) { dot.className = 'conn-dot conn-on'; dot.title = 'SSE 已连接'; }
-      else if (wsFallback && wsFallback.readyState === WebSocket.OPEN) { dot.className = 'conn-dot conn-ws'; dot.title = 'WebSocket 已连接'; }
-      else { dot.className = 'conn-dot conn-off'; dot.title = '未连接'; }
-    }
-
-    function reconnectSSE() {
-      if (sse) { sse.close(); sse = null; }
-      if (wsFallback) { wsFallback.close(); wsFallback = null; }
-      useSSE = true;
-      if (!currentSessionId) return;
-
-      sse = new EventSource('/api/chat/' + currentSessionId + '/sse');
-      sse.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'thinking') {
-            showTyping('正在思考...');
-            document.getElementById('cancelBtn').style.display = '';
-          } else if (data.type === 'tool_executing') {
-            showTyping('正在执行: ' + (data.toolName || '工具'));
-            document.getElementById('cancelBtn').style.display = '';
-          } else if (data.type === 'stream_chunk') {
-            // progressive content - append to last assistant message
-            const lastMsg = chat.querySelector('.message.assistant:last-child');
-            if (lastMsg) {
-              lastMsg.textContent += data.content;
-              chat.scrollTop = chat.scrollHeight;
-            }
-          } else if (data.type === 'response') {
-            removeTyping();
-            addMessage('assistant', data.content);
-            if (!refreshingList) {
-              refreshingList = true;
-              setTimeout(() => { renderSessionList(); refreshingList = false; }, 500);
-            }
-          } else if (data.type === 'error') {
-            removeTyping();
-            addMessage('system', '错误: ' + data.content);
-          }
-          updateConnStatus();
-        } catch (e) {}
-      };
-      sse.onerror = () => {
-        sse.close();
-        sse = null;
-        useSSE = false;
-        updateConnStatus();
-        connectWS();
-      };
-      sse.onopen = () => { updateConnStatus(); };
-    }
-
-    function connectWS() {
-      if (!currentSessionId) return;
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsFallback = new WebSocket(protocol + '//' + location.host + '/ws?sessionId=' + currentSessionId);
-      wsFallback.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'response') {
-          removeTyping();
-          addMessage('assistant', data.content);
-        }
-        updateConnStatus();
-      };
-      wsFallback.onopen = () => { updateConnStatus(); };
-      wsFallback.onclose = () => { updateConnStatus(); setTimeout(connectWS, 3000); };
-    }
     function addMessage(role, content) {
       const msg = document.createElement('div');
       msg.className = 'message ' + role;
       msg.textContent = content;
       chat.appendChild(msg);
-      chat.scrollTop = chat.scrollHeight;
+      scrollToBottom();
     }
+
+    function scrollToBottom() {
+      requestAnimationFrame(() => {
+        chat.scrollTop = chat.scrollHeight;
+      });
+    }
+
+    function isNearBottom() {
+      return chat.scrollHeight - chat.scrollTop - chat.clientHeight < 100;
+    }
+
+    // Show/hide scroll-to-bottom button
+    chat.addEventListener('scroll', () => {
+      if (isNearBottom()) {
+        scrollBtn.classList.remove('visible');
+      } else {
+        scrollBtn.classList.add('visible');
+      }
+    });
+
+    scrollBtn.addEventListener('click', scrollToBottom);
+
+    // ==================== TYPING INDICATOR ====================
     function showTyping(statusText) {
-      let typing = document.getElementById('typing');
+      let typing = $('typing');
       if (!typing) {
         typing = document.createElement('div');
         typing.className = 'typing';
@@ -891,51 +1074,203 @@
         typing.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div><span class="typing-status" id="typingStatus"></span>';
         chat.appendChild(typing);
       }
-      const statusEl = document.getElementById('typingStatus');
-      if (statusEl && statusText) {
-        statusEl.textContent = statusText;
-      }
-      chat.scrollTop = chat.scrollHeight;
-    }
-    function removeTyping() {
-      const typing = document.getElementById('typing');
-      if (typing) typing.remove();
-      document.getElementById('cancelBtn').style.display = 'none';
+      const statusEl = $('typingStatus');
+      if (statusEl && statusText) statusEl.textContent = statusText;
+      scrollToBottom();
     }
 
+    function removeTyping() {
+      const typing = $('typing');
+      if (typing) typing.remove();
+      cancelBtn.style.display = 'none';
+    }
+
+    // ==================== SSE ====================
+    let reconnectAttempts = 0;
+
+    function reconnectSSE() {
+      if (state.sse) { state.sse.close(); state.sse = null; }
+      if (state.wsFallback) { state.wsFallback.close(); state.wsFallback = null; }
+      state.useSSE = true;
+      reconnectAttempts = 0;
+      if (!state.currentSessionId) return;
+
+      connectSSE();
+    }
+
+    function connectSSE() {
+      if (!state.currentSessionId) return;
+      state.sse = new EventSource(API + '/chat/' + state.currentSessionId + '/sse');
+
+      state.sse.onmessage = (event) => {
+        reconnectAttempts = 0;
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'thinking') {
+            showTyping('正在思考...');
+            cancelBtn.style.display = '';
+          } else if (data.type === 'tool_executing') {
+            showTyping('正在执行: ' + (data.toolName || '工具'));
+            cancelBtn.style.display = '';
+          } else if (data.type === 'stream_chunk') {
+            const lastMsg = chat.querySelector('.message.assistant:last-child');
+            if (lastMsg) {
+              lastMsg.textContent += data.content;
+              if (isNearBottom()) scrollToBottom();
+            }
+          } else if (data.type === 'response') {
+            removeTyping();
+            addMessage('assistant', data.content);
+            renderSessionList();
+          } else if (data.type === 'error') {
+            removeTyping();
+            addMessage('system', '错误: ' + data.content);
+          }
+        } catch (e) {
+          console.warn('SSE parse error:', e, event.data);
+        }
+        updateConnStatus();
+      };
+
+      state.sse.onerror = () => {
+        state.sse.close();
+        state.sse = null;
+        state.useSSE = false;
+        updateConnStatus();
+        // Exponential backoff
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        reconnectAttempts++;
+        console.log('SSE reconnecting in ' + delay + 'ms (attempt ' + reconnectAttempts + ')');
+        setTimeout(connectWS, delay);
+      };
+
+      state.sse.onopen = () => {
+        reconnectAttempts = 0;
+        updateConnStatus();
+      };
+    }
+
+    function connectWS() {
+      if (!state.currentSessionId) return;
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      state.wsFallback = new WebSocket(protocol + '//' + location.host + '/ws?sessionId=' + state.currentSessionId);
+
+      state.wsFallback.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'response') {
+            removeTyping();
+            addMessage('assistant', data.content);
+          }
+        } catch (e) {}
+        updateConnStatus();
+      };
+
+      state.wsFallback.onopen = () => {
+        reconnectAttempts = 0;
+        updateConnStatus();
+      };
+
+      state.wsFallback.onclose = () => {
+        updateConnStatus();
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+        reconnectAttempts++;
+        setTimeout(connectWS, delay);
+      };
+    }
+
+    // ==================== SEND ====================
     async function send() {
       const message = input.value.trim();
-      if (!message || !currentSessionId) return;
+      if (!message || !state.currentSessionId || state.sending) return;
+
+      state.sending = true;
+      sendBtn.disabled = true;
+      sendBtn.classList.add('loading');
+      sendBtn.textContent = '⏳';
+
       addMessage('user', message);
       input.value = '';
       showTyping();
+      saveInputDraft();
 
-      if (useSSE) {
+      if (state.useSSE) {
         try {
-          await fetch('/api/chat/' + currentSessionId, {
+          const res = await fetch(API + '/chat/' + state.currentSessionId, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ message, userId: USER_ID })
           });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
         } catch (err) {
-          addMessage('system', '\u53d1\u9001\u5931\u8d25: ' + (err.message || '\u7f51\u7edc\u9519\u8bef'));
+          addMessage('system', '发送失败: ' + (err.message || '网络错误'));
           removeTyping();
         }
-      } else if (wsFallback && wsFallback.readyState === WebSocket.OPEN) {
-        wsFallback.send(JSON.stringify({ sessionId: currentSessionId, message, userId: USER_ID }));
+      } else if (state.wsFallback && state.wsFallback.readyState === WebSocket.OPEN) {
+        try {
+          state.wsFallback.send(JSON.stringify({ sessionId: state.currentSessionId, message, userId: USER_ID }));
+        } catch (err) {
+          addMessage('system', '发送失败: ' + (err.message || '网络错误'));
+          removeTyping();
+        }
       } else {
-        addMessage('system', '\u672a\u8fde\u63a5\uff0c\u65e0\u6cd5\u53d1\u9001');
+        addMessage('system', '未连接，无法发送');
         removeTyping();
       }
+
+      state.sending = false;
+      sendBtn.disabled = false;
+      sendBtn.classList.remove('loading');
+      sendBtn.textContent = '发送';
     }
 
     sendBtn.addEventListener('click', send);
-    input.addEventListener('keypress', (e) => { if (e.key === 'Enter') send(); });
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
 
-    // Init
+    // ==================== CANCEL ====================
+    cancelBtn.addEventListener('click', async () => {
+      if (!state.currentSessionId) return;
+      try {
+        await fetch(API + '/chat/' + state.currentSessionId + '/cancel', { method: 'POST' });
+      } catch (e) {}
+      removeTyping();
+      addMessage('system', '已取消');
+      state.sending = false;
+      sendBtn.disabled = false;
+      sendBtn.classList.remove('loading');
+      sendBtn.textContent = '发送';
+    });
+
+    // ==================== INIT ====================
+    function initChat() {
+      loadSessions().then(sessions => {
+        if (!state.currentSessionId || !sessions.find(s => s.id === state.currentSessionId)) {
+          if (sessions.length > 0) {
+            switchSession(sessions[0].id);
+          } else {
+            createNewSession();
+          }
+        } else {
+          renderSessionList();
+          loadMessages(state.currentSessionId);
+          reconnectSSE();
+          restoreInputDraft();
+        }
+      }).catch(e => {
+        console.error('initChat failed:', e);
+      });
+    }
+
+    document.getElementById('newSessionBtn').addEventListener('click', createNewSession);
+
     initChat();
 
-    // ==================== WELCOME ====================
+    // ==================== WELCOME PAGE ====================
     document.getElementById('wc-save').addEventListener('click', async () => {
       const openaiKey = document.getElementById('wc-openai-key').value.trim();
       const anthropicKey = document.getElementById('wc-anthropic-key').value.trim();
@@ -946,14 +1281,17 @@
       if (anthropicKey) updates['anthropic_api_key'] = anthropicKey;
       updates['default_agent'] = agent;
 
-      if (Object.keys(updates).length > 0) {
-        await apiPost('/config/batch', updates);
-        await apiPost('/config/reload');
+      try {
+        if (Object.keys(updates).length > 0) {
+          await apiPost('/config/batch', updates);
+          await apiPost('/config/reload');
+        }
+        localStorage.setItem('vibe_agent_visited', '1');
+        toast('配置已保存！');
+        showView('chat');
+      } catch (e) {
+        errToast(e);
       }
-
-      localStorage.setItem('vibe_agent_visited', '1');
-      toast('\u914d\u7f6e\u5df2\u4fdd\u5b58\uff01');
-      showView('chat');
     });
 
     document.getElementById('wc-skip').addEventListener('click', () => {
@@ -963,18 +1301,22 @@
 
     // ==================== CONFIG ====================
     const CONFIG_CATEGORIES = {
-      ai: 'AI \u670d\u52a1\u914d\u7f6e',
-      agent: 'Agent \u8bbe\u7f6e',
-      channel: '\u6e20\u9053\u914d\u7f6e',
-      system: '\u7cfb\u7edf\u914d\u7f6e'
+      ai: 'AI 服务配置',
+      agent: 'Agent 设置',
+      channel: '通道配置',
+      system: '系统配置'
     };
 
     let configEntries = [];
 
     async function loadConfig() {
-      const data = await apiGet('/config');
-      configEntries = data.entries || [];
-      renderConfigForm();
+      try {
+        const data = await apiGet('/config');
+        configEntries = data.entries || [];
+        renderConfigForm();
+      } catch (e) {
+        errToast(e);
+      }
     }
 
     function renderConfigForm() {
@@ -995,10 +1337,10 @@
           const needsRestart = item.key === 'port' || item.key === 'host' || item.key === 'redis_url';
           html += '<div class="config-row">' +
             '<div><label>' + item.key + '</label>' +
-            '<div class="desc">' + (item.description || '') + (needsRestart ? '<span class="restart-tag">\u9700\u91cd\u542f</span>' : '') + '</div></div>' +
+            '<div class="desc">' + (item.description || '') + (needsRestart ? '<span class="restart-tag">需重启</span>' : '') + '</div></div>' +
             '<div style="flex:1;display:flex;align-items:center;gap:0.5rem;">' +
             '<input type="' + (isPassword ? 'password' : 'text') + '" id="cfg-' + item.key + '" value="' + escapeHtml(item.value || '') + '" data-key="' + item.key + '" data-encrypted="' + item.encrypted + '">' +
-            (isPassword ? '<button class="toggle-vis" onclick="toggleVisibility(\'cfg-' + item.key + '\')">\uD83D\uDC41</button>' : '') +
+            (isPassword ? '<button class="toggle-vis" onclick="toggleVisibility(\'cfg-' + item.key + '\')">👁</button>' : '') +
             '</div></div>';
         }
         if (cat === 'channel') {
@@ -1013,27 +1355,27 @@
     function renderFeishuSection() {
       return '<div style="margin-top:1.5rem;padding:1rem;background:#1a1a2e;border-radius:0.5rem;border:1px solid #0f3460;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;">' +
-        '<h4 style="color:#00d9ff;font-size:0.95rem;">\u98de\u4e66\u673a\u5668\u4eba\u8fde\u63a5</h4>' +
-        '<span id="feishu-status-badge" style="font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:0.3rem;background:#4a1a1a;color:#ff6b6b;">\u672a\u8fde\u63a5</span></div>' +
+        '<h4 style="color:#00d9ff;font-size:0.95rem;">飞书机器人连接</h4>' +
+        '<span id="feishu-status-badge" style="font-size:0.8rem;padding:0.2rem 0.5rem;border-radius:0.3rem;background:#4a1a1a;color:#ff6b6b;">未连接</span></div>' +
 
         '<div style="margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid #0f3460;">' +
-        '<p style="font-size:0.8rem;color:#00d9ff;margin-bottom:0.5rem;font-weight:600;">\u65b9\u5f0f\u4e00\uff1a\u626b\u7801\u521b\u5efa\u673a\u5668\u4eba\uff08\u63a8\u8350\uff09</p>' +
+        '<p style="font-size:0.8rem;color:#00d9ff;margin-bottom:0.5rem;font-weight:600;">方式一：扫码创建机器人（推荐）</p>' +
         '<div style="display:flex;gap:1.5rem;align-items:flex-start;">' +
         '<div style="flex-shrink:0;">' +
-        '<div id="feishu-register-qr" style="width:160px;height:160px;background:#16213e;border-radius:0.5rem;display:flex;align-items:center;justify-content:center;color:#666;font-size:0.8rem;overflow:hidden;">\u70b9\u51fb\u4e0b\u65b9\u6309\u94ae\u751f\u6210\u4e8c\u7ef4\u7801</div>' +
+        '<div id="feishu-register-qr" style="width:160px;height:160px;background:#16213e;border-radius:0.5rem;display:flex;align-items:center;justify-content:center;color:#666;font-size:0.8rem;overflow:hidden;">点击下方按钮生成二维码</div>' +
         '<div id="feishu-register-status" style="text-align:center;margin-top:0.5rem;font-size:0.75rem;color:#888;"></div></div>' +
         '<div style="flex:1;"><p style="font-size:0.85rem;color:#aaa;margin-bottom:0.75rem;line-height:1.5;">' +
-        '1. \u70b9\u51fb\u300c\u626b\u7801\u521b\u5efa\u673a\u5668\u4eba\u300d<br>' +
-        '2. \u7528\u98de\u4e66 App \u626b\u7801 \u2192 \u70b9\u300c\u6388\u6743\u540c\u610f\u300d<br>' +
-        '3. \u7cfb\u7edf\u81ea\u52a8\u83b7\u53d6 App ID / App Secret<br>' +
-        '4. \u70b9\u51fb\u300c\u6d4b\u8bd5\u8fde\u63a5\u300d\u9a8c\u8bc1</p>' +
+        '1. 点击「扫码创建机器人」<br>' +
+        '2. 用飞书 App 扫码 → 点「授权同意」<br>' +
+        '3. 系统自动获取 App ID / App Secret<br>' +
+        '4. 点击「测试连接」验证</p>' +
         '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-        '<button class="btn-primary" onclick="handleFeishuRegister()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">\u626b\u7801\u521b\u5efa\u673a\u5668\u4eba</button>' +
-        '<button class="btn-secondary" onclick="handleFeishuTest()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">\u6d4b\u8bd5\u8fde\u63a5</button></div>' +
+        '<button class="btn-primary" onclick="handleFeishuRegister()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">扫码创建机器人</button>' +
+        '<button class="btn-secondary" onclick="handleFeishuTest()" style="padding:0.4rem 0.8rem;font-size:0.85rem;width:auto;">测试连接</button></div>' +
         '<div id="feishu-test-result" style="margin-top:0.5rem;font-size:0.8rem;color:#aaa;"></div></div></div></div>' +
 
-        '<div><p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">\u65b9\u5f0f\u4e8c\uff1a\u624b\u52a8\u914d\u7f6e\uff08\u5df2\u6709\u5e94\u7528\uff09</p>' +
-        '<div id="feishu-manual-hint" style="font-size:0.8rem;color:#666;">\u5728\u4e0a\u65b9\u586b\u5199 feishu_app_id\u3001feishu_app_secret\u3001feishu_verification_token</div></div></div>';
+        '<div><p style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">方式二：手动配置（已有应用）</p>' +
+        '<div id="feishu-manual-hint" style="font-size:0.8rem;color:#666;">在上方填写 feishu_app_id、feishu_app_secret、feishu_verification_token</div></div></div>';
     }
 
     let feishuSse = null;
@@ -1042,13 +1384,13 @@
       if (feishuSse) { feishuSse.close(); feishuSse = null; }
       const qrContainer = document.getElementById('feishu-register-qr');
       const statusDiv = document.getElementById('feishu-register-status');
-      qrContainer.innerHTML = '<div style="color:#666;">\u521d\u59cb\u5316\u4e2d...</div>';
+      qrContainer.innerHTML = '<div style="color:#666;">初始化中...</div>';
       statusDiv.textContent = '';
 
       try {
         const data = await apiPost('/feishu/register/init', {});
         if (!data.success) {
-          qrContainer.innerHTML = '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">' + (data.message || '\u521d\u59cb\u5316\u5931\u8d25') + '</div>';
+          qrContainer.innerHTML = '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">' + (data.message || '初始化失败') + '</div>';
           return;
         }
 
@@ -1061,11 +1403,11 @@
           qrContainer.innerHTML = '<div style="padding:0.5rem;font-size:0.7rem;word-break:break-all;color:#00d9ff;">' + qrUrl + '</div>';
         }
 
-        statusDiv.textContent = '\u7b49\u5f85\u626b\u7801...';
+        statusDiv.textContent = '等待扫码...';
         statusDiv.style.color = '#00d9ff';
 
         const deviceCode = data.deviceCode;
-        feishuSse = new EventSource('/api/feishu/register/' + encodeURIComponent(deviceCode) + '/sse');
+        feishuSse = new EventSource(API + '/feishu/register/' + encodeURIComponent(deviceCode) + '/sse');
         feishuSse.onmessage = async (event) => {
           try {
             const reg = JSON.parse(event.data);
@@ -1078,48 +1420,48 @@
               if (appSecretInput) appSecretInput.value = reg.appSecret || '';
               await apiPost('/config/batch', { feishu_app_id: reg.appId || '', feishu_app_secret: reg.appSecret || '' });
               await apiPost('/config/reload');
-              qrContainer.innerHTML = '<div style="color:#00d9ff;font-size:2rem;">\u2713</div>';
-              statusDiv.textContent = '\u521b\u5efa\u6210\u529f\uff01\u51ed\u8bc1\u5df2\u81ea\u52a8\u586b\u5145';
+              qrContainer.innerHTML = '<div style="color:#00d9ff;font-size:2rem;">✓</div>';
+              statusDiv.textContent = '创建成功！凭证已自动填充';
               statusDiv.style.color = '#00d9ff';
-              toast('\u98de\u4e66\u673a\u5668\u4eba\u521b\u5efa\u6210\u529f\uff01');
+              toast('飞书机器人创建成功！');
               updateFeishuBadge(true);
             } else if (reg.status === 'denied') {
               feishuSse.close(); feishuSse = null;
-              statusDiv.textContent = '\u7528\u6237\u62d2\u7edd\u6388\u6743';
+              statusDiv.textContent = '用户拒绝授权';
               statusDiv.style.color = '#ff6b6b';
             } else if (reg.status === 'expired') {
               feishuSse.close(); feishuSse = null;
-              statusDiv.textContent = '\u4e8c\u7ef4\u7801\u5df2\u8fc7\u671f';
+              statusDiv.textContent = '二维码已过期';
               statusDiv.style.color = '#ff6b6b';
             } else if (reg.status === 'error') {
               feishuSse.close(); feishuSse = null;
-              statusDiv.textContent = '\u9519\u8bef: ' + (reg.error || '\u672a\u77e5\u9519\u8bef');
+              statusDiv.textContent = '错误: ' + (reg.error || '未知错误');
               statusDiv.style.color = '#ff6b6b';
             }
           } catch (e) {}
         };
       } catch (error) {
-        qrContainer.innerHTML = '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">' + (error.message || '\u521d\u59cb\u5316\u5931\u8d25') + '</div>';
+        qrContainer.innerHTML = '<div style="color:#ff6b6b;font-size:0.75rem;padding:0.5rem;">' + (error.message || '初始化失败') + '</div>';
       }
     }
 
     async function handleFeishuTest() {
       const resultDiv = document.getElementById('feishu-test-result');
-      resultDiv.textContent = '\u6d4b\u8bd5\u4e2d...';
+      resultDiv.textContent = '测试中...';
       resultDiv.style.color = '#aaa';
       try {
         const data = await apiPost('/feishu/test', {});
         if (data.success) {
-          resultDiv.textContent = '\u2705 ' + data.message;
+          resultDiv.textContent = '✅ ' + data.message;
           resultDiv.style.color = '#00d9ff';
           updateFeishuBadge(true);
         } else {
-          resultDiv.textContent = '\u274c ' + data.message;
+          resultDiv.textContent = '❌ ' + data.message;
           resultDiv.style.color = '#ff6b6b';
           updateFeishuBadge(false);
         }
       } catch (err) {
-        resultDiv.textContent = '\u274c \u6d4b\u8bd5\u5931\u8d25: ' + (err.message || '\u7f51\u7edc\u9519\u8bef');
+        resultDiv.textContent = '❌ 测试失败: ' + (err.message || '网络错误');
         resultDiv.style.color = '#ff6b6b';
       }
     }
@@ -1135,11 +1477,11 @@
       const badge = document.getElementById('feishu-status-badge');
       if (!badge) return;
       if (connected) {
-        badge.textContent = '\u5df2\u8fde\u63a5';
+        badge.textContent = '已连接';
         badge.style.background = '#1a4a1a';
         badge.style.color = '#00d9ff';
       } else {
-        badge.textContent = '\u672a\u8fde\u63a5';
+        badge.textContent = '未连接';
         badge.style.background = '#4a1a1a';
         badge.style.color = '#ff6b6b';
       }
@@ -1163,17 +1505,25 @@
         const value = input.value.trim();
         updates[key] = value;
       });
-      await apiPost('/config/batch', updates);
-      await apiPost('/config/reload');
-      toast('\u914d\u7f6e\u5df2\u4fdd\u5b58\u5e76\u70ed\u52a0\u8f7d\uff01');
-      loadConfig();
+      try {
+        await apiPost('/config/batch', updates);
+        await apiPost('/config/reload');
+        toast('配置已保存并热加载！');
+        loadConfig();
+      } catch (e) {
+        errToast(e);
+      }
     });
 
     document.getElementById('cfg-reset').addEventListener('click', async () => {
-      if (!confirm('\u786e\u5b9a\u8981\u91cd\u7f6e\u6240\u6709\u914d\u7f6e\u4e3a\u9ed8\u8ba4\u503c\u5417\uff1f')) return;
-      await apiPost('/config/reset');
-      toast('\u914d\u7f6e\u5df2\u91cd\u7f6e');
-      loadConfig();
+      if (!confirm('确定要重置所有配置为默认值吗？')) return;
+      try {
+        await apiPost('/config/reset');
+        toast('配置已重置');
+        loadConfig();
+      } catch (e) {
+        errToast(e);
+      }
     });
 
     const observer = new MutationObserver(() => {
