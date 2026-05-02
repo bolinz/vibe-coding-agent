@@ -24,7 +24,12 @@ const CONFIG_SCHEMA: Record<string, { category: ConfigEntry['category']; descrip
   port: { category: 'system', description: 'HTTP 服务端口（需重启生效）', encrypted: false },
   host: { category: 'system', description: 'HTTP 监听地址（需重启生效）', encrypted: false },
   redis_url: { category: 'system', description: 'Redis 连接 URL（需重启生效）', encrypted: false },
-  session_secret: { category: 'system', description: '会话加密密钥', encrypted: true }
+  session_secret: { category: 'system', description: '会话加密密钥', encrypted: true },
+  webhook_tokens: { category: 'system', description: 'Webhook 允许的 token（逗号分隔，* 为允许所有）', encrypted: false },
+  github_token: { category: 'channel', description: 'GitHub Personal Access Token', encrypted: true },
+  github_app_id: { category: 'channel', description: 'GitHub App ID', encrypted: false },
+  github_private_key: { category: 'channel', description: 'GitHub App 私钥 (PEM)', encrypted: true },
+  github_webhook_secret: { category: 'channel', description: 'GitHub Webhook 签名密钥', encrypted: true },
 };
 
 function xorEncryptDecrypt(input: string, key: string): string {

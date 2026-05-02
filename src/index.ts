@@ -10,6 +10,9 @@ import { FeishuChannelFactory } from './channels/feishu/factory';
 import { WebSocketChannel } from './channels/websocket/channel';
 import { WebSocketChannelFactory } from './channels/websocket/factory';
 import { SSHChannelFactory } from './channels/ssh/factory';
+import { WebhookChannelFactory } from './channels/webhook/factory';
+import { GitHubChannelFactory } from './channels/github/factory';
+import { MCPChannelFactory } from './channels/mcp/factory';
 import { WebServer } from './web/server';
 import { AgentManager } from './agents/manager';
 import { RuntimeRegistry } from './agents/runtime/registry';
@@ -101,10 +104,19 @@ async function main() {
   channelManager.registerFactory(new FeishuChannelFactory());
   channelManager.registerFactory(new WebSocketChannelFactory());
   channelManager.registerFactory(new SSHChannelFactory());
+  channelManager.registerFactory(new WebhookChannelFactory());
+  channelManager.registerFactory(new GitHubChannelFactory());
+  channelManager.registerFactory(new MCPChannelFactory());
 
   // Create channels
   channelManager.enable('websocket', { port: config.port });
   channelManager.enable('ssh', {});
+  channelManager.enable('webhook', { tokens: process.env.WEBHOOK_TOKENS || '' });
+  // GitHub channel: enabled when any github_* config is set
+  if (process.env.GITHUB_TOKEN || process.env.GITHUB_APP_ID) {
+    channelManager.enable('github', {});
+  }
+  channelManager.enable('mcp', {});
   if (config.feishu.appId && config.feishu.appSecret) {
     await channelManager.enable('feishu', {
       appId: config.feishu.appId,

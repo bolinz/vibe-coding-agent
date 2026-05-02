@@ -5,6 +5,9 @@ import { Server } from 'bun';
 import type { Router } from '../core/router';
 import type { ChannelManager } from '../core/channel-manager';
 import type { WebSocketChannel } from '../channels/websocket/channel';
+import type { WebhookChannel } from '../channels/webhook/channel';
+import type { GitHubChannel } from '../channels/github/channel';
+import type { MCPChannel } from '../channels/mcp/channel';
 import type { BunWebSocket } from '../channels/types';
 import type { EventBus } from '../core/event';
 import type { SessionManager } from '../core/session';
@@ -630,11 +633,32 @@ export class WebServer {
       });
     });
 
-    this.app.route('/api', api);
-
-    this.app.notFound((c) => {
-      return c.json({ error: 'Not found' }, 404);
+    // Channel-specific API routes
+    api.post('/channels/webhook/:token', async (c) => {
+      const ch = this.channelManager.get<WebhookChannel>('webhook');
+      if (!ch || !ch.isConnected()) return c.json({ error: 'Webhook channel disabled' }, 503);
+      return ch.handleRequest(c);
     });
+
+    api.post('/channels/github/webhook', async (c) => {
+      const ch = this.channelManager.get<GitHubChannel>('github');
+      if (!ch || !ch.isConnected()) return c.json({ error: 'GitHub channel disabled' }, 503);
+      return ch.handleWebhook(c);
+    });
+
+    api.get('/channels/mcp/sse', async (c) => {
+      const ch = this.channelManager.get<MCPChannel>('mcp');
+      if (!ch || !ch.isConnected()) return c.json({ error: 'MCP channel disabled' }, 503);
+      return ch.handleSSE(c);
+    });
+
+    api.post('/channels/mcp/message', async (c) => {
+      const ch = this.channelManager.get<MCPChannel>('mcp');
+      if (!ch || !ch.isConnected()) return c.json({ error: 'MCP channel disabled' }, 503);
+      return ch.handleMessage(c);
+    });
+
+    this.app.route('/api', api);
   }
 
   async start(): Promise<void> {
