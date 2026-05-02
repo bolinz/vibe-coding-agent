@@ -865,34 +865,6 @@
       wsFallback.onopen = () => { updateConnStatus(); };
       wsFallback.onclose = () => { updateConnStatus(); setTimeout(connectWS, 3000); };
     }
-          } else if (data.type === 'error') {
-            removeTyping();
-            addMessage('system', '\u9519\u8bef: ' + data.content);
-          }
-        } catch (e) {}
-      };
-      sse.onerror = () => {
-        sse.close();
-        sse = null;
-        useSSE = false;
-        connectWS();
-      };
-    }
-
-    function connectWS() {
-      if (!currentSessionId) return;
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      wsFallback = new WebSocket(protocol + '//' + location.host + '/ws?sessionId=' + currentSessionId);
-      wsFallback.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'response') {
-          removeTyping();
-          addMessage('assistant', data.content);
-        }
-      };
-      wsFallback.onclose = () => { setTimeout(connectWS, 3000); };
-    }
-
     function addMessage(role, content) {
       const msg = document.createElement('div');
       msg.className = 'message ' + role;
