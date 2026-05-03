@@ -278,3 +278,4 @@ bun run start         # 生产运行
 |------|------|
 | `docs/00-architecture.md` | 完整架构设计 |
 | `docs/01-ui-design.md` | UI 设计文档 (现代极简风格) |
+| `docs/08-deployment-status.md` | 部署指南 |
