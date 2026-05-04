@@ -3,6 +3,47 @@ import type { Agent, ContainerConfig, StreamChunk } from '../types';
 import type { RuntimeAdapter } from './types';
 import { ConfigManager } from '../../core/config';
 
+export function buildContainerRunArgs(
+  containerCmd: string,
+  cc: ContainerConfig,
+  agentCmd: string,
+  agentArgs: string[],
+  message: string,
+  workingDir?: string,
+  agentCwd?: string,
+): string[] {
+  const cmd = cc.cmd || containerCmd;
+  const workDir = cc.workDir || '/workspace';
+  const hostWorkDir = workingDir || agentCwd || process.cwd();
+
+  const args: string[] = [cmd, 'run', '--rm', '-i'];
+
+  args.push('-v', `${hostWorkDir}:${workDir}`);
+  args.push('-w', workDir);
+
+  if (cc.memory) {
+    args.push('--memory', cc.memory);
+  }
+  if (cc.cpu) {
+    args.push('--cpus', cc.cpu);
+  }
+  if (cc.networkDisabled) {
+    args.push('--network', 'none');
+  }
+
+  args.push(cc.image);
+  args.push(agentCmd);
+
+  const substitutedArgs = agentArgs.map((a) => a === '{message}' ? message : a);
+  args.push(...substitutedArgs);
+
+  if (!agentArgs.includes('{message}')) {
+    args.push(message);
+  }
+
+  return args;
+}
+
 interface ContainerSession {
   proc: ReturnType<typeof spawn>;
   controller: AbortController;
@@ -56,7 +97,15 @@ export class ContainerRuntime implements RuntimeAdapter {
     const config = await this.getContainerCmd();
     const controller = new AbortController();
 
-    const dockerArgs = this.buildRunArgs(config, cc, agent, message, workingDir);
+    const dockerArgs = buildContainerRunArgs(
+      config.cmd,
+      cc,
+      agent.config.command,
+      agent.config.args ?? [],
+      message,
+      workingDir,
+      agent.config.cwd,
+    );
 
     try {
       const proc = spawn({
@@ -158,58 +207,5 @@ export class ContainerRuntime implements RuntimeAdapter {
     const cm = new ConfigManager();
     const cmd = cm.get('container_cmd') || 'docker';
     return { cmd };
-  }
-
-  private buildRunArgs(
-    config: { cmd: string },
-    cc: ContainerConfig,
-    agent: Agent,
-    message: string,
-    workingDir?: string,
-  ): string[] {
-    const cmd = cc.cmd || config.cmd;
-    const workDir = cc.workDir || '/workspace';
-    const hostWorkDir = workingDir || agent.config.cwd || process.cwd();
-
-    const args: string[] = [cmd, 'run', '--rm', '-i'];
-
-    // Volume mount: host working dir → container work dir
-    args.push('-v', `${hostWorkDir}:${workDir}`);
-
-    // Set working directory inside container
-    args.push('-w', workDir);
-
-    // Resource limits
-    if (cc.memory) {
-      args.push('--memory', cc.memory);
-    }
-    if (cc.cpu) {
-      args.push('--cpus', cc.cpu);
-    }
-
-    // Network
-    if (cc.networkDisabled) {
-      args.push('--network', 'none');
-    }
-
-    // Image
-    args.push(cc.image);
-
-    // Agent command
-    args.push(agent.config.command);
-
-    // Agent args with {message} support
-    const agentArgs = (agent.config.args ?? []).map((arg) =>
-      arg === '{message}' ? message : arg
-    );
-    args.push(...agentArgs);
-
-    // No {message} placeholder → append message at end
-    const hasPlaceholder = (agent.config.args ?? []).includes('{message}');
-    if (!hasPlaceholder) {
-      args.push(message);
-    }
-
-    return args;
   }
 }
