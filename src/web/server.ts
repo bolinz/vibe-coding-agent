@@ -22,25 +22,28 @@ interface ServerConfig {
   host: string;
 }
 
-function friendlyError(err: string): string {
+function friendlyError(err: string): { content: string; suggestion?: string } {
   const lower = err.toLowerCase();
   if (lower.includes('selinux') && lower.includes('relabeling')) {
-    return '容器卷挂载权限不足：SELinux 阻止了目录挂载。请确保工作目录在 $HOME 下（如 ~/projects），避免使用 /tmp 或系统目录。';
+    return { content: '容器卷挂载权限不足：SELinux 阻止了目录挂载。工作目录需在 $HOME 下，避免使用 /tmp 或系统目录。', suggestion: '检查工作目录路径，确保在用户 home 目录下' };
   }
   if (lower.includes('statfs') || (lower.includes('no such file') && lower.includes('directory'))) {
-    return '工作目录不存在。会话使用默认工作目录，但该路径在服务器上不存在。请在会话中双击工作目录路径设置一个有效目录。';
+    return { content: '工作目录不存在。请为会话设置一个有效的工作目录。', suggestion: '在侧栏双击工作目录路径进行修改' };
   }
   if (lower.includes('posix_spawn') || lower.includes('enoent')) {
     const cmd = lower.match(/'([^']+)'/)?.[1] || '';
-    return `命令 "${cmd}" 未找到。请确保 ${cmd} 已安装在服务器上，或在配置页设置正确的路径。`;
+    return { content: `命令 "${cmd}" 未找到。请确保 ${cmd} 已安装在服务器上，或在配置页设置正确的路径。`, suggestion: cmd ? `安装 ${cmd} 或切换到已安装的 Agent` : undefined };
   }
   if (lower.includes('docker') && lower.includes('path')) {
-    return '容器引擎 "docker" 未找到。服务器使用 Podman，请在配置页将 "container_cmd" 设为 "podman"。';
+    return { content: '容器引擎 "docker" 未找到。服务器使用 Podman，请在配置页将 "container_cmd" 设为 "podman"。', suggestion: '前往配置页 → Agent → 设置 container_cmd = podman' };
   }
   if (lower.includes('tool calling exceeded')) {
-    return 'Agent 工具调用超过最大轮数。这可能是因为工具执行陷入了循环，请尝试简化指令。';
+    return { content: 'Agent 工具调用超过最大轮数。这可能是因为工具执行陷入了循环。', suggestion: '请尝试简化指令或更换 Agent' };
   }
-  return err;
+  if (lower.includes('image') && (lower.includes('not found') || lower.includes('pull access'))) {
+    return { content: `容器镜像不存在或无权限拉取: ${err}`, suggestion: '在配置页的「容器镜像」管理中拉取所需镜像' };
+  }
+  return { content: err };
 }
 
 function checkDir(path: string | undefined): 'valid' | 'missing' | 'none' {
@@ -310,6 +313,69 @@ export class WebServer {
         return c.json({ error: `Agent '${name}' not found` }, 404);
       }
       return c.json({ success: true });
+    });
+
+    // Image management
+    api.get('/images', async (c) => {
+      try {
+        const cm = new ConfigManager();
+        const cmd = cm.get('container_cmd') || 'docker';
+        const proc = Bun.spawn({
+          cmd: [cmd, 'images', '--format', '{{.Repository}}:{{.Tag}}|{{.Size}}|{{.CreatedAt}}|{{.ID}}'],
+          stdout: 'pipe', stderr: 'pipe',
+        });
+        const out = await new Response(proc.stdout).text();
+        await proc.exited;
+        const images = out.trim().split('\n').filter(Boolean).map(line => {
+          const [repo, size, created, id] = line.split('|');
+          return { repo: repo || '', size: size || '', created: created || '', id: id || '' };
+        });
+        return c.json({ images, cmd });
+      } catch (err: any) {
+        return c.json({ error: err.message, images: [] });
+      }
+    });
+
+    api.post('/images/pull', async (c) => {
+      try {
+        const body = await c.req.json() as { image: string };
+        if (!body.image?.trim()) return c.json({ error: 'image name required' }, 400);
+        const cm = new ConfigManager();
+        const cmd = cm.get('container_cmd') || 'docker';
+        const proc = Bun.spawn({
+          cmd: [cmd, 'pull', body.image.trim()],
+          stdout: 'pipe', stderr: 'pipe',
+        });
+        const out = await new Response(proc.stdout).text();
+        const err = await new Response(proc.stderr).text();
+        await proc.exited;
+        if (proc.exitCode !== 0) {
+          return c.json({ error: err || out || 'pull failed' });
+        }
+        return c.json({ success: true, output: out || err });
+      } catch (err: any) {
+        return c.json({ error: err.message });
+      }
+    });
+
+    api.post('/images/:name/remove', async (c) => {
+      try {
+        const imageName = c.req.param('name');
+        const cm = new ConfigManager();
+        const cmd = cm.get('container_cmd') || 'docker';
+        const proc = Bun.spawn({
+          cmd: [cmd, 'rmi', imageName],
+          stdout: 'pipe', stderr: 'pipe',
+        });
+        await proc.exited;
+        if (proc.exitCode !== 0) {
+          const err = await new Response(proc.stderr).text();
+          return c.json({ error: err || 'remove failed' });
+        }
+        return c.json({ success: true });
+      } catch (err: any) {
+        return c.json({ error: err.message });
+      }
     });
 
     // Tools
@@ -700,10 +766,12 @@ export class WebServer {
             } else if (event.type === 'agent.error') {
               const errData = event.data as any;
               const rawMsg = typeof errData === 'string' ? errData : errData?.error || errData?.message || 'Unknown error';
+              const friendly = friendlyError(rawMsg);
               send({
                 type: 'error',
-                content: friendlyError(rawMsg),
+                content: friendly.content,
                 rawError: rawMsg,
+                suggestion: friendly.suggestion,
                 timestamp: event.timestamp.toISOString(),
               });
             } else if (event.type === 'agent.container_starting') {

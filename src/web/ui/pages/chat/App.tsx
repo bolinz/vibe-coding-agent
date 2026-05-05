@@ -101,7 +101,8 @@ function ChatApp() {
         } else if (data.type === 'error') {
           setTypingText(null);
           setIsRunning(false);
-          setMessages(prev => [...prev, { role: 'system', content: `错误: ${data.content}` }]);
+          const suggestion = data.suggestion ? `\n\n💡 ${data.suggestion}` : '';
+          setMessages(prev => [...prev, { role: 'system', content: `错误: ${data.content}${suggestion}` }]);
         }
       } catch {}
     };

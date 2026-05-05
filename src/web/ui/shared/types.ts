@@ -24,6 +24,7 @@ export interface SSEMessage {
   type: string;
   content?: string;
   rawError?: string;
+  suggestion?: string;
   toolName?: string;
   timestamp?: string;
 }

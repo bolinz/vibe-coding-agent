@@ -7,6 +7,7 @@ import { ArrowLeft } from 'lucide-preact';
 import { NavSidebar } from './NavSidebar';
 import { FeishuCard } from './FeishuCard';
 import { AgentManager } from './AgentManager';
+import { ImageManager } from './ImageManager';
 import { ActionBar } from './ActionBar';
 
 type Category = 'ai' | 'agent' | 'channel' | 'system';
@@ -131,6 +132,11 @@ function ConfigApp() {
                       feishuSSE={feishuSSE}
                       setFeishuSSE={setFeishuSSE}
                     />
+                  )}
+                  {cat.id === 'channel' && (
+                    <ConfigSection title="容器镜像">
+                      <ImageManager />
+                    </ConfigSection>
                   )}
                 </ConfigSection>
               )}
