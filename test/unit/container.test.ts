@@ -33,7 +33,7 @@ describe('buildContainerRunArgs', () => {
     const wIdx = args.indexOf('-w');
     expect(args[wIdx + 1]).toBe('/app');
     const vIdx = args.indexOf('-v');
-    expect(args[vIdx + 1]).toMatch(/:\/app$/);
+    expect(args[vIdx + 1]).toMatch(/:\/app:z$/);
   });
 
   test('custom container engine (podman)', () => {
@@ -82,16 +82,22 @@ describe('buildContainerRunArgs', () => {
     expect(last).toBe('suffix');
   });
 
+  test('empty message without placeholder does not append empty arg', () => {
+    const args = buildContainerRunArgs('docker', defaultCC, 'cat', ['file.txt'], '');
+    const last = args[args.length - 1];
+    expect(last).toBe('file.txt');
+  });
+
   test('volume mount uses agentCwd when no workingDir', () => {
     const args = buildContainerRunArgs('docker', defaultCC, 'echo', ['hi'], '', undefined, '/custom/cwd');
     const vIdx = args.indexOf('-v');
-    expect(args[vIdx + 1]).toBe('/custom/cwd:/workspace');
+    expect(args[vIdx + 1]).toBe('/custom/cwd:/workspace:z');
   });
 
   test('volume mount uses workingDir when provided', () => {
     const args = buildContainerRunArgs('docker', defaultCC, 'echo', ['hi'], '', '/session/dir', '/custom/cwd');
     const vIdx = args.indexOf('-v');
-    expect(args[vIdx + 1]).toBe('/session/dir:/workspace');
+    expect(args[vIdx + 1]).toBe('/session/dir:/workspace:z');
   });
 });
 

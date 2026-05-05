@@ -18,7 +18,7 @@ export function buildContainerRunArgs(
 
   const args: string[] = [cmd, 'run', '--rm', '-i'];
 
-  args.push('-v', `${hostWorkDir}:${workDir}`);
+  args.push('-v', `${hostWorkDir}:${workDir}:z`);
   args.push('-w', workDir);
 
   if (cc.memory) {
@@ -37,7 +37,7 @@ export function buildContainerRunArgs(
   const substitutedArgs = agentArgs.map((a) => a === '{message}' ? message : a);
   args.push(...substitutedArgs);
 
-  if (!agentArgs.includes('{message}')) {
+  if (!agentArgs.includes('{message}') && message) {
     args.push(message);
   }
 
