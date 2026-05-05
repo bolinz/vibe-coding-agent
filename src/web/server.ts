@@ -358,13 +358,14 @@ export class WebServer {
       }
     });
 
-    api.post('/images/:name/remove', async (c) => {
+    api.post('/images/remove', async (c) => {
       try {
-        const imageName = c.req.param('name');
+        const body = await c.req.json() as { name: string };
+        if (!body.name?.trim()) return c.json({ error: 'image name required' }, 400);
         const cm = new ConfigManager();
         const cmd = cm.get('container_cmd') || 'docker';
         const proc = Bun.spawn({
-          cmd: [cmd, 'rmi', imageName],
+          cmd: [cmd, 'rmi', body.name.trim()],
           stdout: 'pipe', stderr: 'pipe',
         });
         await proc.exited;

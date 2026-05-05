@@ -53,7 +53,11 @@ export function ImageManager() {
   const handleRemove = async (repo: string) => {
     if (!confirm(`确定删除镜像 "${repo}"？`)) return;
     try {
-      const res = await fetch(`/api/images/${encodeURIComponent(repo)}/remove`, { method: 'POST' });
+      const res = await fetch(`/api/images/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: repo }),
+      });
       const data = await res.json();
       if (data.success) loadImages();
       else alert(data.error);
