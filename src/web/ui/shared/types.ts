@@ -6,6 +6,7 @@ export interface SessionData {
   pinned: boolean;
   participants?: Array<{ channel: string; userId: string }>;
   workingDir?: string;
+  workingDirStatus?: 'valid' | 'missing' | 'none';
   context?: { workingDir?: string };
   messageCount: number;
   createdAt: string;
@@ -22,6 +23,7 @@ export interface MessageData {
 export interface SSEMessage {
   type: string;
   content?: string;
+  rawError?: string;
   toolName?: string;
   timestamp?: string;
 }

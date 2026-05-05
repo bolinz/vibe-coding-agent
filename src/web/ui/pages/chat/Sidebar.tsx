@@ -1,6 +1,6 @@
 import { h } from 'preact';
 import { useState, useEffect } from 'preact/hooks';
-import { Plus, X, Pin, PinOff, Folder, Smartphone, Globe, Terminal } from 'lucide-preact';
+import { Plus, X, Pin, PinOff, Folder, Smartphone, Globe, Terminal, CheckCircle, AlertTriangle } from 'lucide-preact';
 import type { SessionData } from '../../shared/types';
 import { formatTime } from '../../shared/utils';
 import { api } from '../../shared/api';
@@ -21,6 +21,21 @@ const CHANNEL_ICONS: Record<string, any> = {
   ssh: Terminal,
 };
 
+function WdStatus({ status }: { status?: string }) {
+  if (status === 'valid') return <CheckCircle size={11} style="color:var(--success);flex-shrink:0;" />;
+  if (status === 'missing') return <AlertTriangle size={11} style="color:var(--warning);flex-shrink:0;" />;
+  return null;
+}
+
+function AgentOption({ name }: { name: string }) {
+  const isContainer = name.startsWith('container-');
+  return (
+    <option value={name}>
+      {isContainer ? '📦 ' : ''}{name}
+    </option>
+  );
+}
+
 function SessionItem({ session, isActive, onSwitch, onSessionsChange, agentNames }: {
   session: SessionData;
   isActive: boolean;
@@ -32,6 +47,8 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange, agentNames
   const [deleting, setDeleting] = useState(false);
 
   const channels = (session.participants || []).map(p => CHANNEL_ICONS[p.channel]).filter(Boolean);
+
+  const wdStatus = session.workingDirStatus;
 
   const cls = [
     'session-item',
@@ -75,7 +92,6 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange, agentNames
     if (e.key === 'Escape') setEditingWD(false);
   };
 
-
   return (
     <div class={cls} onClick={() => onSwitch(session.id)}>
       <button class="session-del" onClick={handleDelete} title="关闭会话">
@@ -98,13 +114,15 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange, agentNames
           autoFocus
         />
       ) : (
-        <div class="session-wd" onDblClick={(e) => { e.stopPropagation(); setEditingWD(true); }}>
+        <div class="session-wd" onDblClick={(e) => { e.stopPropagation(); setEditingWD(true); }}
+             title={wdStatus === 'missing' ? '目录不存在，双击设置有效路径' : wdStatus === 'valid' ? '目录有效' : ''}>
+          <WdStatus status={wdStatus} />
           <Folder size={11} />
           {session.workingDir || '/projects/sandbox'}
         </div>
       )}
       <select class="session-agent" value={session.agentType} onChange={handleAgentChange} onClick={(e) => e.stopPropagation()}>
-        {agentNames.map(a => <option value={a}>{a}</option>)}
+        {agentNames.map(a => <AgentOption key={a} name={a} />)}
       </select>
       <button class="session-pin" onClick={handlePin} title={session.pinned ? '取消置顶' : '置顶'}>
         {session.pinned ? <Pin size={13} /> : <PinOff size={13} />}

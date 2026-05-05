@@ -12,7 +12,7 @@ import type { BunWebSocket } from '../channels/types';
 import type { EventBus } from '../core/event';
 import type { SessionManager } from '../core/session';
 import { ConfigManager } from '../core/config';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import QRCode from 'qrcode';
 import { startRegistration, getRegistration, subscribeRegistration } from '../channels/feishu-register';
@@ -20,6 +20,32 @@ import { startRegistration, getRegistration, subscribeRegistration } from '../ch
 interface ServerConfig {
   port: number;
   host: string;
+}
+
+function friendlyError(err: string): string {
+  const lower = err.toLowerCase();
+  if (lower.includes('selinux') && lower.includes('relabeling')) {
+    return '容器卷挂载权限不足：SELinux 阻止了目录挂载。请确保工作目录在 $HOME 下（如 ~/projects），避免使用 /tmp 或系统目录。';
+  }
+  if (lower.includes('statfs') || (lower.includes('no such file') && lower.includes('directory'))) {
+    return '工作目录不存在。会话使用默认工作目录，但该路径在服务器上不存在。请在会话中双击工作目录路径设置一个有效目录。';
+  }
+  if (lower.includes('posix_spawn') || lower.includes('enoent')) {
+    const cmd = lower.match(/'([^']+)'/)?.[1] || '';
+    return `命令 "${cmd}" 未找到。请确保 ${cmd} 已安装在服务器上，或在配置页设置正确的路径。`;
+  }
+  if (lower.includes('docker') && lower.includes('path')) {
+    return '容器引擎 "docker" 未找到。服务器使用 Podman，请在配置页将 "container_cmd" 设为 "podman"。';
+  }
+  if (lower.includes('tool calling exceeded')) {
+    return 'Agent 工具调用超过最大轮数。这可能是因为工具执行陷入了循环，请尝试简化指令。';
+  }
+  return err;
+}
+
+function checkDir(path: string | undefined): 'valid' | 'missing' | 'none' {
+  if (!path) return 'none';
+  try { return existsSync(path) ? 'valid' : 'missing'; } catch { return 'missing'; }
 }
 
 export class WebServer {
@@ -148,6 +174,7 @@ export class WebServer {
         pinned: s.pinned ?? false,
         participants: s.participants ?? [],
         workingDir: s.context?.workingDir,
+        workingDirStatus: checkDir(s.context?.workingDir),
         messageCount: s.messages.length,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
@@ -167,6 +194,7 @@ export class WebServer {
         pinned: session.pinned ?? false,
         participants: session.participants ?? [],
         workingDir: session.context?.workingDir,
+        workingDirStatus: checkDir(session.context?.workingDir),
         context: session.context,
         messages: session.messages.map((m) => ({
           role: m.role,
@@ -192,6 +220,7 @@ export class WebServer {
         userId: session.userId,
         agentType: session.agentType,
         workingDir: session.context?.workingDir,
+        workingDirStatus: checkDir(session.context?.workingDir),
         createdAt: session.createdAt,
       }, 201);
     });
@@ -670,10 +699,11 @@ export class WebServer {
               }
             } else if (event.type === 'agent.error') {
               const errData = event.data as any;
-              const errMsg = typeof errData === 'string' ? errData : errData?.error || errData?.message || 'Unknown error';
+              const rawMsg = typeof errData === 'string' ? errData : errData?.error || errData?.message || 'Unknown error';
               send({
                 type: 'error',
-                content: errMsg,
+                content: friendlyError(rawMsg),
+                rawError: rawMsg,
                 timestamp: event.timestamp.toISOString(),
               });
             } else if (event.type === 'agent.container_starting') {
