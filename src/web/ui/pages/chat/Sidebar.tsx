@@ -1,5 +1,5 @@
 import { h } from 'preact';
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import { Plus, X, Pin, PinOff, Folder, Smartphone, Globe, Terminal } from 'lucide-preact';
 import type { SessionData } from '../../shared/types';
 import { formatTime } from '../../shared/utils';
@@ -12,6 +12,7 @@ interface Props {
   onSwitch: (id: string) => Promise<void>;
   onCreate: () => Promise<void>;
   onSessionsChange: () => Promise<void>;
+  agentNames: string[];
 }
 
 const CHANNEL_ICONS: Record<string, any> = {
@@ -20,11 +21,12 @@ const CHANNEL_ICONS: Record<string, any> = {
   ssh: Terminal,
 };
 
-function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
+function SessionItem({ session, isActive, onSwitch, onSessionsChange, agentNames }: {
   session: SessionData;
   isActive: boolean;
   onSwitch: (id: string) => Promise<void>;
   onSessionsChange: () => Promise<void>;
+  agentNames: string[];
 }) {
   const [editingWD, setEditingWD] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -73,7 +75,6 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
     if (e.key === 'Escape') setEditingWD(false);
   };
 
-  const AGENTS = ['echo', 'opencode', 'hermes', 'claude', 'codex', 'cline', 'aider', 'container-echo'];
 
   return (
     <div class={cls} onClick={() => onSwitch(session.id)}>
@@ -103,7 +104,7 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
         </div>
       )}
       <select class="session-agent" value={session.agentType} onChange={handleAgentChange} onClick={(e) => e.stopPropagation()}>
-        {AGENTS.map(a => <option value={a}>{a}</option>)}
+        {agentNames.map(a => <option value={a}>{a}</option>)}
       </select>
       <button class="session-pin" onClick={handlePin} title={session.pinned ? '取消置顶' : '置顶'}>
         {session.pinned ? <Pin size={13} /> : <PinOff size={13} />}
@@ -112,7 +113,7 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
   );
 }
 
-export function Sidebar({ collapsed, sessions, currentSessionId, onSwitch, onCreate, onSessionsChange }: Props) {
+export function Sidebar({ collapsed, sessions, currentSessionId, onSwitch, onCreate, onSessionsChange, agentNames }: Props) {
   const sorted = [...sessions].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   return (
@@ -129,6 +130,7 @@ export function Sidebar({ collapsed, sessions, currentSessionId, onSwitch, onCre
             isActive={s.id === currentSessionId}
             onSwitch={onSwitch}
             onSessionsChange={onSessionsChange}
+            agentNames={agentNames}
           />
         ))}
       </div>

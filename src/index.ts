@@ -15,6 +15,7 @@ import { GitHubChannelFactory } from './channels/github/factory';
 import { MCPChannelFactory } from './channels/mcp/factory';
 import { WebServer } from './web/server';
 import { AgentManager } from './agents/manager';
+import { AgentStore } from './core/agent-store';
 import { RuntimeRegistry } from './agents/runtime/registry';
 import { CLIRuntime } from './agents/runtime/cli';
 import { SessionRuntime } from './agents/runtime/session';
@@ -73,11 +74,12 @@ async function main() {
   console.log('[Agent] Tools registered:', toolRegistry.list());
 
   // Agent architecture
-  const agentManager = new AgentManager();
+  const agentStore = new (await import('./core/agent-store')).AgentStore();
+  const agentManager = new AgentManager(agentStore);
   const runtimeRegistry = new RuntimeRegistry();
   runtimeRegistry.register('cli', new CLIRuntime());
   runtimeRegistry.register('session', new SessionRuntime());
-  runtimeRegistry.register('container', new ContainerRuntime());
+  runtimeRegistry.register('container', new ContainerRuntime(eventBus));
 
   const defaultAgent = process.env.DEFAULT_AGENT ?? 'echo';
   const pipeline = new PipelineEngine(agentManager, runtimeRegistry, toolRegistry, {
@@ -95,6 +97,7 @@ async function main() {
   agentManager.register({ name: 'opencode', description: 'OpenCode AI coding agent', runtimeType: 'cli', config: { command: 'opencode', args: ['run', '{message}'] }, capabilities: { streaming: true, multiTurn: true } });
   agentManager.register({ name: 'echo', description: 'Simple echo agent for testing', runtimeType: 'cli', config: { command: 'echo', args: ['Echo:'] }, capabilities: { streaming: false, multiTurn: false } });
   agentManager.register({ name: 'container-echo', description: 'Echo in Alpine container', runtimeType: 'cli', config: { command: 'echo', args: ['ContainerEcho:', '{message}'], container: { image: 'alpine:latest' } }, capabilities: { streaming: false, multiTurn: false } });
+  agentManager.register({ name: 'container-opencode', description: 'OpenCode in Node container', runtimeType: 'cli', config: { command: 'npx', args: ['--yes', 'opencode-ai', 'run', '{message}'], container: { image: 'node:20-slim', networkDisabled: false } }, capabilities: { streaming: true, multiTurn: true } });
   console.log('[Agent] Agents registered:', agentManager.listNames());
 
   // ===== Channel Manager =====

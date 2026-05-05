@@ -1,13 +1,22 @@
 import type { Agent } from './types';
+import { AgentStore } from '../core/agent-store';
 
-/**
- * AgentManager — manages agent configurations (pure declarations, no execution logic).
- */
 export class AgentManager {
   private agents = new Map<string, Agent>();
+  private store?: AgentStore;
+
+  constructor(store?: AgentStore) {
+    this.store = store;
+    if (store) {
+      for (const agent of store.getAll()) {
+        this.agents.set(agent.name, agent);
+      }
+    }
+  }
 
   register(agent: Agent): void {
     this.agents.set(agent.name, agent);
+    this.store?.set(agent);
   }
 
   get(name: string): Agent | null {
@@ -23,7 +32,9 @@ export class AgentManager {
   }
 
   remove(name: string): boolean {
-    return this.agents.delete(name);
+    const deleted = this.agents.delete(name);
+    this.store?.delete(name);
+    return deleted;
   }
 
   has(name: string): boolean {

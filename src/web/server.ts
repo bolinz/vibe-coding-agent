@@ -246,6 +246,43 @@ export class WebServer {
       return c.json({ agents: this.router.getAvailableAgents() });
     });
 
+    api.post('/agents/register', async (c) => {
+      try {
+        const body = await c.req.json();
+        const { name, description, runtimeType, command, args, image, containerCmd } = body;
+        if (!name || !command) {
+          return c.json({ error: 'name and command are required' }, 400);
+        }
+        const agent = {
+          name,
+          description: description || '',
+          runtimeType: runtimeType || 'cli',
+          config: {
+            command,
+            args: args || [],
+            ...(image ? { container: { image, cmd: containerCmd } } : {}),
+          },
+          capabilities: {
+            streaming: body.streaming ?? false,
+            multiTurn: body.multiTurn ?? false,
+          },
+        };
+        this.router.registerAgent(agent);
+        return c.json({ success: true, name });
+      } catch (err: any) {
+        return c.json({ error: err.message }, 400);
+      }
+    });
+
+    api.post('/agents/:name/unregister', async (c) => {
+      const name = c.req.param('name');
+      const removed = this.router.unregisterAgent(name);
+      if (!removed) {
+        return c.json({ error: `Agent '${name}' not found` }, 404);
+      }
+      return c.json({ success: true });
+    });
+
     // Tools
     api.get('/tools', (c) => {
       return c.json({ tools: ['shell', 'git', 'file'] });
@@ -637,6 +674,13 @@ export class WebServer {
               send({
                 type: 'error',
                 content: errMsg,
+                timestamp: event.timestamp.toISOString(),
+              });
+            } else if (event.type === 'agent.container_starting') {
+              const d = event.data as any;
+              send({
+                type: 'container_starting',
+                content: d?.image || '',
                 timestamp: event.timestamp.toISOString(),
               });
             }

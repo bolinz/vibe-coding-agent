@@ -29,4 +29,8 @@ export interface SSEMessage {
 export interface AgentInfo {
   name: string;
   description: string;
+  runtimeType: string;
+  hasContainer: boolean;
+  streaming: boolean;
+  multiTurn: boolean;
 }

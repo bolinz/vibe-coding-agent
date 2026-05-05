@@ -51,6 +51,8 @@ export const api = {
 
   agents: {
     list: () => apiGet<{ agents: AgentInfo[] }>('/agents'),
+    register: (data: Record<string, unknown>) => apiPost<{ success: boolean; name: string }>('/agents/register', data),
+    unregister: (name: string) => apiPost<{ success: boolean }>(`/agents/${name}/unregister`),
   },
 
   config: {

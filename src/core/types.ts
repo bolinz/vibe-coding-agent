@@ -98,7 +98,9 @@ export type EventType =
   | 'agent.tool_executing'
   | 'agent.stream_chunk'
   | 'agent.response'
-  | 'agent.error';
+  | 'agent.error'
+  | 'agent.container_starting'
+  | 'agent.container_downloading';
 
 export interface SessionEvent {
   type: EventType;

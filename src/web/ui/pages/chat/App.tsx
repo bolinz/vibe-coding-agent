@@ -19,6 +19,7 @@ function ChatApp() {
   const [isSending, setIsSending] = useState(false);
   const [typingText, setTypingText] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [agents, setAgents] = useState<string[]>([]);
   const sseRef = useRef<EventSource | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const shouldUseSSE = useRef(true);
@@ -78,6 +79,9 @@ function ChatApp() {
           setIsRunning(true);
         } else if (data.type === 'tool_executing') {
           setTypingText(`正在执行: ${data.toolName || '工具'}`);
+          setIsRunning(true);
+        } else if (data.type === 'container_starting') {
+          setTypingText(`容器启动中... (${data.content || ''})`);
           setIsRunning(true);
         } else if (data.type === 'stream_chunk') {
           setMessages(prev => {
@@ -173,6 +177,7 @@ function ChatApp() {
         createNewSession();
       }
     });
+    api.agents.list().then(data => setAgents((data.agents || []).map(a => a.name))).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -200,6 +205,7 @@ function ChatApp() {
           onSwitch={switchSession}
           onCreate={createNewSession}
           onSessionsChange={loadSessions}
+          agentNames={agents}
         />
         <div class="chat-area">
           <ChatArea

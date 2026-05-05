@@ -259,3 +259,63 @@
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ===== AGENT MANAGER ===== */
+.agent-form {
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background: var(--bg-app);
+}
+.agent-form-row { display: flex; gap: 0.75rem; }
+.agent-form-field { flex: 1; display: flex; flex-direction: column; gap: 0.25rem; }
+.agent-form-field label { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500; }
+.agent-form-field input, .agent-form-field select { font-size: 0.8125rem; }
+.agent-form-actions { display: flex; gap: 0.5rem; padding-top: 0.25rem; }
+.agent-table { padding: 0.25rem 0; }
+.agent-table-header, .agent-table-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 80px 60px 50px 50px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  align-items: center;
+}
+.agent-table-header {
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.agent-table-row { border-bottom: 1px solid var(--border-subtle); }
+.agent-table-row:last-child { border-bottom: none; }
+.agent-name { font-weight: 500; color: var(--text-primary); }
+.agent-desc { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-badge {
+  display: inline-block;
+  padding: 0.0625rem 0.375rem;
+  border-radius: var(--radius-full);
+  font-size: 0.625rem;
+  font-weight: 500;
+}
+.agent-badge.runtime-cli { background: var(--accent-dim); color: var(--text-primary); }
+.agent-badge.runtime-container { background: #dbeafe; color: #1d4ed8; }
+.agent-badge.runtime-session { background: var(--success-bg); color: var(--success); }
+.btn-add-agent {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  transition: all 0.15s;
+}
+.btn-add-agent:hover { border-color: var(--accent); color: var(--accent); }
+.btn-agent-del {
+  color: var(--text-muted);
+  padding: 0.125rem;
+  border-radius: var(--radius-xs);
+  transition: color 0.15s;
+}
+.btn-agent-del:hover { color: var(--danger); }

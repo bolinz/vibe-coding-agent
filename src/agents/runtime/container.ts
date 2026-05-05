@@ -2,6 +2,7 @@ import { spawn } from 'bun';
 import type { Agent, ContainerConfig, StreamChunk } from '../types';
 import type { RuntimeAdapter } from './types';
 import { ConfigManager } from '../../core/config';
+import type { EventBus } from '../../core/event';
 
 export function buildContainerRunArgs(
   containerCmd: string,
@@ -56,6 +57,20 @@ export class ContainerRuntime implements RuntimeAdapter {
 
   private sessions = new Map<string, ContainerSession>();
   private agentMap = new Map<string, { agent: Agent; workingDir?: string }>();
+  private eventBus?: EventBus;
+
+  constructor(eventBus?: EventBus) {
+    this.eventBus = eventBus;
+  }
+
+  private emit(eventType: string, sessionId: string, data?: unknown): void {
+    this.eventBus?.publish({
+      type: eventType as any,
+      sessionId,
+      data: data ?? {},
+      timestamp: new Date(),
+    });
+  }
 
   async start(sessionId: string, agent: Agent, workingDir?: string): Promise<void> {
     this.agentMap.set(sessionId, { agent, workingDir });
@@ -118,6 +133,8 @@ export class ContainerRuntime implements RuntimeAdapter {
       workingDir,
       agent.config.cwd,
     );
+
+    this.emit('agent.container_starting', sessionId, { image: cc.image, cmd: config.cmd });
 
     try {
       const proc = spawn({

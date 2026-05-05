@@ -18,11 +18,23 @@ export class Router {
     private defaultAgent: string = 'echo'
   ) {}
 
-  getAvailableAgents(): Array<{ name: string; description: string }> {
+  getAvailableAgents(): Array<{ name: string; description: string; runtimeType: string; hasContainer: boolean; streaming: boolean; multiTurn: boolean }> {
     return this.agentManager.list().map((agent) => ({
       name: agent.name,
       description: agent.description,
+      runtimeType: agent.runtimeType,
+      hasContainer: !!agent.config.container,
+      streaming: agent.capabilities.streaming,
+      multiTurn: agent.capabilities.multiTurn,
     }));
+  }
+
+  registerAgent(agent: import('../agents/types').Agent): void {
+    this.agentManager.register(agent);
+  }
+
+  unregisterAgent(name: string): boolean {
+    return this.agentManager.remove(name);
   }
 
   getDefaultAgent(): string {

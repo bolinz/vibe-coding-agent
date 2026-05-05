@@ -6,6 +6,7 @@ import { ConfigRow } from './ConfigRow';
 import { ArrowLeft } from 'lucide-preact';
 import { NavSidebar } from './NavSidebar';
 import { FeishuCard } from './FeishuCard';
+import { AgentManager } from './AgentManager';
 import { ActionBar } from './ActionBar';
 
 type Category = 'ai' | 'agent' | 'channel' | 'system';
@@ -19,6 +20,15 @@ interface ConfigEntry {
   masked: string;
 }
 
+interface AgentInfo {
+  name: string;
+  description: string;
+  runtimeType: string;
+  hasContainer: boolean;
+  streaming: boolean;
+  multiTurn: boolean;
+}
+
 const CATEGORIES: Array<{ id: Category; icon: string; label: string }> = [
   { id: 'ai', icon: 'bot', label: 'AI' },
   { id: 'agent', icon: 'settings', label: 'Agent' },
@@ -29,6 +39,7 @@ const CATEGORIES: Array<{ id: Category; icon: string; label: string }> = [
 function ConfigApp() {
   const [activeTab, setActiveTab] = useState<Category>('ai');
   const [entries, setEntries] = useState<ConfigEntry[]>([]);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [feishuConnected, setFeishuConnected] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -43,6 +54,13 @@ function ConfigApp() {
     }
   }, []);
 
+  const loadAgents = useCallback(async () => {
+    try {
+      const data = await api.agents.list();
+      setAgents(data.agents || []);
+    } catch {}
+  }, []);
+
   const loadFeishuStatus = useCallback(async () => {
     try {
       const status = await api.feishu.status();
@@ -52,6 +70,7 @@ function ConfigApp() {
 
   useEffect(() => {
     loadConfig();
+    loadAgents();
     loadFeishuStatus();
   }, []);
 
@@ -98,19 +117,23 @@ function ConfigApp() {
         <div class="config-content" id="config-content">
           {CATEGORIES.map(cat => (
             <div style={{ display: activeTab === cat.id ? 'block' : 'none' }}>
-              <ConfigSection title={cat.label}>
-                {grouped[cat.id]?.map(entry => (
-                  <ConfigRow key={entry.key} entry={entry} />
-                ))}
-                {cat.id === 'channel' && (
-                  <FeishuCard
-                    connected={feishuConnected}
-                    onStatusChange={loadFeishuStatus}
-                    feishuSSE={feishuSSE}
-                    setFeishuSSE={setFeishuSSE}
-                  />
-                )}
-              </ConfigSection>
+              {cat.id === 'agent' ? (
+                <AgentManager agents={agents} onAgentsChange={loadAgents} />
+              ) : (
+                <ConfigSection title={cat.label}>
+                  {grouped[cat.id]?.map(entry => (
+                    <ConfigRow key={entry.key} entry={entry} />
+                  ))}
+                  {cat.id === 'channel' && (
+                    <FeishuCard
+                      connected={feishuConnected}
+                      onStatusChange={loadFeishuStatus}
+                      feishuSSE={feishuSSE}
+                      setFeishuSSE={setFeishuSSE}
+                    />
+                  )}
+                </ConfigSection>
+              )}
             </div>
           ))}
         </div>
