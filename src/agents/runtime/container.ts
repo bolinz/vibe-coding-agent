@@ -88,10 +88,22 @@ export class ContainerRuntime implements RuntimeAdapter {
       throw new Error(`Container agent not initialized for session ${sessionId}. Call start() first.`);
     }
 
-    const { agent, workingDir } = entry;
+    const { agent, workingDir: rawWd } = entry;
     const cc = agent.config.container;
     if (!cc) {
       throw new Error(`Agent ${agent.name} has no container config.`);
+    }
+
+    // Validate working directory exists; create a temp dir under HOME if not
+    let workingDir = rawWd;
+    if (workingDir) {
+      try { require('fs').accessSync(workingDir); } catch {
+        const fallbackDir = `${process.env.HOME}/.cache/vibe-agent/workdir`;
+        try {
+          require('fs').mkdirSync(fallbackDir, { recursive: true });
+          workingDir = fallbackDir;
+        } catch { workingDir = '/tmp'; }
+      }
     }
 
     const config = await this.getContainerCmd();

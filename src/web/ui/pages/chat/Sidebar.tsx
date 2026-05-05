@@ -73,7 +73,7 @@ function SessionItem({ session, isActive, onSwitch, onSessionsChange }: {
     if (e.key === 'Escape') setEditingWD(false);
   };
 
-  const AGENTS = ['echo', 'opencode', 'hermes', 'claude', 'codex', 'cline', 'aider'];
+  const AGENTS = ['echo', 'opencode', 'hermes', 'claude', 'codex', 'cline', 'aider', 'container-echo'];
 
   return (
     <div class={cls} onClick={() => onSwitch(session.id)}>
