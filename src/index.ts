@@ -97,7 +97,7 @@ async function main() {
   agentManager.register({ name: 'opencode', description: 'OpenCode AI coding agent', runtimeType: 'cli', config: { command: 'opencode', args: ['run', '{message}'] }, capabilities: { streaming: true, multiTurn: true } });
   agentManager.register({ name: 'echo', description: 'Simple echo agent for testing', runtimeType: 'cli', config: { command: 'echo', args: ['Echo:'] }, capabilities: { streaming: false, multiTurn: false } });
   agentManager.register({ name: 'container-echo', description: 'Echo in Alpine container', runtimeType: 'cli', config: { command: 'echo', args: ['ContainerEcho:', '{message}'], container: { image: 'alpine:latest' } }, capabilities: { streaming: false, multiTurn: false } });
-  agentManager.register({ name: 'container-opencode', description: 'OpenCode in Node container', runtimeType: 'cli', config: { command: 'npx', args: ['--yes', 'opencode-ai', 'run', '{message}'], container: { image: 'node:20-slim', networkDisabled: false } }, capabilities: { streaming: true, multiTurn: true } });
+  agentManager.register({ name: 'container-opencode', description: 'OpenCode in Node container', runtimeType: 'cli', config: { command: 'npx', args: ['--yes', 'opencode-ai', 'run', '{message}'], container: { image: 'node:20-slim', networkDisabled: false } }, capabilities: { streaming: false, multiTurn: true } });
   console.log('[Agent] Agents registered:', agentManager.listNames());
 
   // ===== Channel Manager =====
