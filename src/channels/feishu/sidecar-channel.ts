@@ -129,7 +129,12 @@ export class SidecarFeishuChannel implements Channel {
         if (uid) this.handleError(uid, (event.data as any)?.error);
       });
     });
-    this.unsubscribeEvent = () => { unsub1(); unsub2(); unsub3(); };
+    const unsub4 = this.eventBus.subscribe('agent.response', (event) => {
+      this.resolveFeishuUserId(event.sessionId).then((uid) => {
+        if (uid) this.handleResponse(uid, (event.data as any)?.content);
+      });
+    });
+    this.unsubscribeEvent = () => { unsub1(); unsub2(); unsub3(); unsub4(); };
   }
 
   private async handleThinking(userId: string, _userMessage: string): Promise<void> {
@@ -156,16 +161,16 @@ export class SidecarFeishuChannel implements Channel {
     }
   }
 
-  private async handleResponse(userId: string, content: string): Promise<void> {
-    this.loadingMessageIds.delete(userId);
-    if (!content) return;
-    await this.sendText(userId, content);
-  }
-
   private async handleError(userId: string, errorMsg: string): Promise<void> {
     this.loadingMessageIds.delete(userId);
     if (!errorMsg) return;
     await this.sendText(userId, `❌ 发生错误：${errorMsg}`);
+  }
+
+  private async handleResponse(userId: string, content: string): Promise<void> {
+    this.loadingMessageIds.delete(userId);
+    if (!content) return;
+    await this.sendText(userId, content);
   }
 
   async disconnect(): Promise<void> {
