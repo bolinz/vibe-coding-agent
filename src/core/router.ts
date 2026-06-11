@@ -5,6 +5,17 @@ import { EventBus } from './event';
 import type { AgentManager } from '../agents/manager';
 import { PipelineEngine } from '../agents/pipeline/executor';
 import { ConfigManager } from './config';
+import { existsSync, mkdirSync } from 'fs';
+
+function resolveWorkingDir(dir: string | undefined, home: string): string {
+  const candidate = dir || '/projects/sandbox';
+  try {
+    if (existsSync(candidate)) return candidate;
+  } catch {}
+  const fallback = `${home}/.cache/vibe-agent/workdir`;
+  try { mkdirSync(fallback, { recursive: true }); } catch {}
+  return fallback;
+}
 
 export class Router {
   private runningPipelines = new Map<string, AbortController>();
@@ -64,11 +75,12 @@ export class Router {
 
       if (!session) {
         const cm = new ConfigManager();
-        const defaultDir = cm.get('working_dir') || '/projects/sandbox';
+        const rawDir = cm.get('working_dir');
+        const workingDir = resolveWorkingDir(rawDir, process.env.HOME || '/tmp');
         session = await this.sessionManager.create(
           message.userId,
           this.defaultAgent,
-          { workingDir: defaultDir },
+          { workingDir },
           message.sessionId
         );
 
@@ -93,8 +105,9 @@ export class Router {
       // 3. Execute via PipelineEngine (handles streaming + tool loops)
       const agentName = session.agentType;
       const cm = new ConfigManager();
-      const defaultDir = cm.get('working_dir') || '/projects/sandbox';
-      const workingDir = session.context?.workingDir || defaultDir;
+      const rawDir = cm.get('working_dir');
+      const configWorkDir = resolveWorkingDir(rawDir, process.env.HOME || '/tmp');
+      const workingDir = resolveWorkingDir(session.context?.workingDir, process.env.HOME || '/tmp') || configWorkDir;
       const responseChunks: string[] = [];
       let responseError: string | undefined;
 
@@ -139,7 +152,17 @@ export class Router {
       // If aborted, don't save to session or broadcast
       if (abortController.signal.aborted) return;
 
-      // 4. Add response to session
+      // 4a. Publish error first (if any), so channels can handle it before empty response
+      if (responseError) {
+        this.eventBus.publish({
+          type: 'agent.error',
+          sessionId: session.id,
+          data: { error: responseError },
+          timestamp: new Date(),
+        });
+      }
+
+      // 4b. Add response to session (even if empty)
       const assistantMessage: UnifiedMessage = {
         channel: message.channel,
         channelId: message.channelId,
@@ -152,17 +175,9 @@ export class Router {
 
       await this.sessionManager.addMessage(session.id, assistantMessage);
 
-      // 5. Broadcast response event to all channels for this session
-      await this.eventBus.broadcastToChannel(session, responseContent);
-
-      // 6. Publish error if any
-      if (responseError) {
-        this.eventBus.publish({
-          type: 'agent.error',
-          sessionId: session.id,
-          data: { error: responseError },
-          timestamp: new Date(),
-        });
+      // 5. Only broadcast response if there's actual content
+      if (responseContent) {
+        await this.eventBus.broadcastToChannel(session, responseContent);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

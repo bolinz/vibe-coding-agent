@@ -148,14 +148,14 @@ export class ContainerRuntime implements RuntimeAdapter {
       this.sessions.set(sessionId, { proc, controller, agent, workingDir });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      const sentinel = spawn({ cmd: ['echo', ''], stdout: 'pipe', stderr: 'pipe' });
+      console.error(`[ContainerRuntime] Spawn failed: ${errorMsg}`);
+      const sentinel = spawn({ cmd: ['echo', errorMsg], stdout: 'pipe', stderr: 'pipe' });
       this.sessions.set(sessionId, {
         proc: sentinel,
         controller,
         agent: { ...agent, capabilities: { ...agent.capabilities, streaming: false } },
         workingDir,
       });
-      (this.sessions.get(sessionId) as ContainerSession & { _spawnError?: string })._spawnError = errorMsg;
     }
   }
 

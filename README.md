@@ -264,7 +264,7 @@ agentManager.register({
 
 ```bash
 bun run typecheck     # tsc --noEmit
-bun test              # 75 tests
+bun test              # 93 tests
 bun run build:ui      # 仅编译前端 (Chat + Config)
 bun run build         # 编译全部 (后端 + 前端)
 bun run start         # 生产运行

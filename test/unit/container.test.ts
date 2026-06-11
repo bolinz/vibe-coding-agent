@@ -141,4 +141,25 @@ describe('ContainerRuntime lifecycle', () => {
     await rt.cancel('sess-3');
     expect(rt.isRunning('sess-3')).toBe(false);
   });
+
+  test('spawn failure yields error chunk via sentinel', async () => {
+    const rt = new ContainerRuntime();
+    const badAgent: Agent = {
+      name: 'bad-container',
+      description: 'non-existent docker',
+      runtimeType: 'container',
+      config: {
+        command: 'echo',
+        args: ['x'],
+        container: { image: 'alpine:latest', cmd: 'this_container_cmd_does_not_exist_999' },
+      },
+      capabilities: { streaming: false, multiTurn: false },
+    };
+    await rt.start('sess-spawn', badAgent);
+    await rt.send('sess-spawn', 'hi');
+    const chunks: StreamChunk[] = [];
+    for await (const c of rt.read('sess-spawn')) chunks.push(c);
+    const textChunks = chunks.filter(c => c.type === 'text').map(c => c.content).join('');
+    expect(textChunks.length).toBeGreaterThan(0);
+  });
 });

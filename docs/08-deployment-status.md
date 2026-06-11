@@ -430,7 +430,8 @@ CSS 通过 `@import` 链式加载，浏览器自动解析相对路径。
 | Claude Code 未登录 | `claude` Agent 不可用 | ❌ |
 | Aider 未安装 | `aider` Agent 不可用 | ❌ |
 | Codex/Cline 未安装 | `codex`/`cline` Agent 不可用 | ❌ |
-| Redis 未启用 | 进程重启后会话丢失 | ❌ |
+| Redis 已启用 | 会话持久化（restart 不丢失） | ✅ |
+| 工作目录不存在 | 默认 `/projects/sandbox` 在 Silverblue 上不可写 | ✅ 自动 fallback 到 `~/.cache/vibe-agent/workdir` |
 
 ### 10.2 修复记录
 
@@ -442,6 +443,17 @@ CSS 通过 `@import` 链式加载，浏览器自动解析相对路径。
 | 2026-05-02 | CSS 样式失效 | `base.css` 未被任何 HTML 加载（`chat.css`/`config.css` 只 import `variables.css`） | 添加 `@import './base.css'` |
 | 2026-05-02 | Config 页面无样式 | Toast class 名错配 `class="toast"` vs CSS `.config-toast` | 统一为 `config-toast` |
 | 2026-05-02 | Config header 含 emoji | `←` 硬编码字面符而非 Lucide `ArrowLeft` | 替换为 `<ArrowLeft size={14} />` |
+| 2026-06-12 | 容器 agent 空回复 | `container-opencode` `streaming=true` 导致 npx 输出被缓冲；sentinel `echo ''` 静默空 | 改为 `streaming=false`；sentinel 输出错误文本 |
+| 2026-06-12 | 飞书错误消息被空响应覆盖 | Router 先广播空 `agent.response` 后广播 `agent.error`，loading 卡片先被清除 | 错误先广播；空响应不广播 |
+
+### 10.3 容器 Agent 注意事项
+
+| 要点 | 说明 |
+|------|------|
+| **streaming** | 容器 agent 推荐 `streaming: false`。容器内 `npx` 等命令的输出缓冲不可控，非流式模式更可靠 |
+| **工作目录** | Silverblue 上 `/projects/sandbox` 不存在，已自动 fallback 到 `~/.cache/vibe-agent/workdir` |
+| **sentinel** | 容器启动失败时输出错误文本（而非静默空），以 `agent.error` 事件推送 |
+| **错误顺序** | `agent.error` 先于空 `agent.response` 广播，保证错误可见 |
 
 ### 10.3 部署注意事项总结
 
@@ -452,7 +464,7 @@ CSS 通过 `@import` 链式加载，浏览器自动解析相对路径。
 │ 每次部署前确认:                                              │
 │  □ `bun run build` 通过                                     │
 │  □ `bun run typecheck` 通过                                 │
-│  □ `bun test` 全部通过 (75 tests)                           │
+│  □ `bun test` 全部通过 (93 tests)                           │
 │  □ dist/ui/ 包含最新 CSS + JS                               │
 │  □ plugins/feishu/sidecar 存在 (如使用飞书)                 │
 │  □ .env 中 SESSION_SECRET 与服务端一致                      │
