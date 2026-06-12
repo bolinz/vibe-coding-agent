@@ -443,6 +443,7 @@ CSS 通过 `@import` 链式加载，浏览器自动解析相对路径。
 | 2026-05-02 | CSS 样式失效 | `base.css` 未被任何 HTML 加载（`chat.css`/`config.css` 只 import `variables.css`） | 添加 `@import './base.css'` |
 | 2026-05-02 | Config 页面无样式 | Toast class 名错配 `class="toast"` vs CSS `.config-toast` | 统一为 `config-toast` |
 | 2026-05-02 | Config header 含 emoji | `←` 硬编码字面符而非 Lucide `ArrowLeft` | 替换为 `<ArrowLeft size={14} />` |
+| 2026-06-12 | 飞书收到两遍消息 | `sidecar-channel.ts` 的 `agent.response` 订阅 + `channelManager.broadcastText()` 双重发送 | 移除 Feishu channel 中冗余的 `agent.response` 订阅 |
 | 2026-06-12 | 容器 agent 空回复 | `container-opencode` `streaming=true` 导致 npx 输出被缓冲；sentinel `echo ''` 静默空 | 改为 `streaming=false`；sentinel 输出错误文本 |
 | 2026-06-12 | 飞书错误消息被空响应覆盖 | Router 先广播空 `agent.response` 后广播 `agent.error`，loading 卡片先被清除 | 错误先广播；空响应不广播 |
 
