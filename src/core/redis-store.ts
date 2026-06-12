@@ -26,7 +26,7 @@ export class RedisSessionStore implements SessionStore {
     if (session.pinned) {
       await this.redis.set(key, data);
     } else {
-      await this.redis.set(key, data, 'EX', 7 * 24 * 60 * 60); // 7 days TTL
+      await this.redis.set(key, data, 'EX', 30 * 24 * 60 * 60); // 30 days TTL
     }
   }
 
@@ -53,6 +53,11 @@ export class RedisSessionStore implements SessionStore {
   }
 
   async listByUserId(userId: string): Promise<Session[]> {
+    const all = await this.listAll();
+    return all.filter(s => s.userId === userId);
+  }
+
+  async listAll(): Promise<Session[]> {
     const sessions: Session[] = [];
     let cursor = '0';
     do {
@@ -64,17 +69,15 @@ export class RedisSessionStore implements SessionStore {
           if (!d) continue;
           try {
             const parsed = JSON.parse(d);
-            if (parsed.userId === userId) {
-              sessions.push({
-                ...parsed,
-                createdAt: new Date(parsed.createdAt),
-                updatedAt: new Date(parsed.updatedAt),
-                messages: parsed.messages.map((m: Record<string, unknown>) => ({
-                  ...m,
-                  timestamp: new Date(m.timestamp as string)
-                }))
-              });
-            }
+            sessions.push({
+              ...parsed,
+              createdAt: new Date(parsed.createdAt),
+              updatedAt: new Date(parsed.updatedAt),
+              messages: parsed.messages.map((m: Record<string, unknown>) => ({
+                ...m,
+                timestamp: new Date(m.timestamp as string)
+              }))
+            });
           } catch {}
         }
       }

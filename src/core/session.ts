@@ -25,6 +25,13 @@ export class SessionManager {
   async listAll(): Promise<Session[]> {
     const memory = Array.from(this.sessions.values());
     if (memory.length > 0) return memory;
+    if (this.store.listAll) {
+      const stored = await this.store.listAll();
+      for (const s of stored) {
+        this.sessions.set(s.id, s);
+      }
+      return stored;
+    }
     return [];
   }
 
@@ -163,6 +170,7 @@ export interface SessionStore {
   load(sessionId: string): Promise<Session | null>;
   delete(sessionId: string): Promise<void>;
   listByUserId?(userId: string): Promise<Session[]>;
+  listAll?(): Promise<Session[]>;
 }
 
 export class MemorySessionStore implements SessionStore {
@@ -179,5 +187,9 @@ export class MemorySessionStore implements SessionStore {
 
   async delete(sessionId: string): Promise<void> {
     this.sessions.delete(sessionId);
+  }
+
+  async listAll(): Promise<Session[]> {
+    return Array.from(this.sessions.values()).map(s => ({ ...s }));
   }
 }
