@@ -109,6 +109,8 @@ export class Router {
   }
 
   async route(message: UnifiedMessage): Promise<void> {
+    let timedOut = false;
+    let timeoutId: Timer | undefined;
     try {
       // 1. Get or create session
       let session = await this.sessionManager.get(message.sessionId);
@@ -134,6 +136,13 @@ export class Router {
           data: { userId: message.userId },
           timestamp: new Date(),
         });
+      }
+
+      // Agent fallback: if previous run failed and agent isn't echo, switch to echo
+      if (session.context?.shouldFallback && session.agentType !== 'echo') {
+        console.log(`[Router] Fallback: switching session ${session.id} from ${session.agentType} to echo`);
+        session.agentType = 'echo';
+        await this.sessionManager.updateContext(session.id, { shouldFallback: '' });
       }
 
       // Inject system prompt on first use for interactive channels
@@ -185,6 +194,18 @@ export class Router {
       const abortController = new AbortController();
       this.runningPipelines.set(session.id, abortController);
 
+      // Pipeline timeout: 60 seconds
+      timeoutId = setTimeout(() => {
+        timedOut = true;
+        this.eventBus.publish({
+          type: 'agent.error',
+          sessionId: session.id,
+          data: { error: `Agent ${session.agentType} 响应超时（60 秒），已自动取消` },
+          timestamp: new Date(),
+        });
+        abortController.abort();
+      }, 120_000);
+
       try {
         for await (const chunk of this.pipeline.executeStream(
           agentName,
@@ -220,12 +241,16 @@ export class Router {
           }
         }
       } finally {
+        clearTimeout(timeoutId);
         this.runningPipelines.delete(session.id);
       }
 
+      // If aborted due to timeout, the error was already published; just return
+      if (timedOut) return;
+
       const responseContent = responseChunks.join('');
 
-      // If aborted, don't save to session or broadcast
+      // If aborted by cancel, don't save to session or broadcast
       if (abortController.signal.aborted) return;
 
       // 4a. Publish error first (if any), so channels can handle it before empty response
@@ -255,7 +280,16 @@ export class Router {
       if (responseContent || responseCard || responseAttachments.length > 0) {
         await this.eventBus.broadcastToChannel(session, responseContent, responseCard, responseAttachments);
       }
+
+      // 6. Agent fallback: if the current agent failed and isn't echo, auto-switch
+      if (responseError && session.agentType !== 'echo') {
+        console.log(`[Router] Agent ${session.agentType} failed, switching to echo for session ${session.id}`);
+        await this.sessionManager.updateContext(session.id, { shouldFallback: 'true' });
+      }
     } catch (error) {
+      // Don't publish error for aborted (timeout already did)
+      if (timedOut) return;
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 
       this.eventBus.publish({

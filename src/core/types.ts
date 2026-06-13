@@ -57,6 +57,7 @@ export interface SessionContext {
   workingDir?: string;
   env?: Record<string, string>;
   promptInjected?: string;
+  shouldFallback?: string;
 }
 
 // Agent types
