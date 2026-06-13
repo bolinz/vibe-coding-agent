@@ -34,6 +34,7 @@ export class SidecarFeishuChannel implements Channel {
   private eventBus: EventBus;
   private sessionBinding: SessionBindingStore;
   private loadingMessageIds = new Map<string, string>();
+  private groupChats = new Map<string, string>(); // userId → chatId for group messages
   private unsubscribeEvent: (() => void) | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
@@ -194,6 +195,12 @@ export class SidecarFeishuChannel implements Channel {
     }
   }
 
+  private chatParams(userId: string): { receiveId: string; chatType?: string } {
+    const chatId = this.groupChats.get(userId);
+    if (chatId) return { receiveId: chatId, chatType: 'group' };
+    return { receiveId: userId };
+  }
+
   private async resolveFeishuUserId(sessionId: string): Promise<string | null> {
     const session = await this.sessionManager.get(sessionId);
     if (!session?.participants) return null;
@@ -206,10 +213,12 @@ export class SidecarFeishuChannel implements Channel {
   private async sendText(userId: string, text: string): Promise<void> {
     if (!this.rpc) return;
     try {
+      const { receiveId, chatType } = this.chatParams(userId);
       await this.rpc.call('sendMessage', {
-        receiveId: userId,
+        receiveId,
         content: text,
         msgType: 'text',
+        ...(chatType ? { chatType } : {}),
       });
     } catch (error) {
       console.error('[FeishuSidecar] Failed to send message:', error);
@@ -219,7 +228,12 @@ export class SidecarFeishuChannel implements Channel {
   private async sendCard(userId: string, card: Record<string, unknown>): Promise<void> {
     if (!this.rpc) return;
     try {
-      await this.rpc.call('sendCardSync', { receiveId: userId, card });
+      const { receiveId, chatType } = this.chatParams(userId);
+      await this.rpc.call('sendCardSync', {
+        receiveId,
+        card,
+        ...(chatType ? { chatType } : {}),
+      });
     } catch (error) {
       console.error('[FeishuSidecar] Failed to send card:', error);
     }
@@ -228,11 +242,16 @@ export class SidecarFeishuChannel implements Channel {
   // ===== Sidecar Event Handlers =====
 
   private async handleSidecarMessage(params: any): Promise<void> {
-    const { userId, content } = params;
+    const { userId, content, chatId } = params;
     if (!userId || !content) return;
 
     console.log(`[FeishuSidecar] Message from ${userId}: ${content.substring(0, 100)}`);
     this.menuState.markInteracted(userId);
+
+    // Track group chat context
+    if (chatId && chatId !== userId) {
+      this.groupChats.set(userId, chatId);
+    }
 
     // Handle /workdir command
     if (content.trim().startsWith('/workdir ')) {
@@ -280,7 +299,7 @@ export class SidecarFeishuChannel implements Channel {
   }
 
   async handleCardAction(params: any): Promise<{ card?: Record<string, unknown>; toast?: { type: string; content: string } }> {
-    const { userId, action, value } = params;
+    const { userId, action, value, chatId } = params;
     if (!userId || !action) {
       return {
         card: this.cardBuilder.buildMenuCard(this.router.getDefaultAgent()),

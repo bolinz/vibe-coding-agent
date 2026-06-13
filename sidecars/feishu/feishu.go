@@ -94,6 +94,7 @@ func (f *FeishuConn) SendMessage(params json.RawMessage) (interface{}, error) {
 		ReceiveID string `json:"receiveId"`
 		Content   string `json:"content"`
 		MsgType   string `json:"msgType,omitempty"`
+		ChatType  string `json:"chatType,omitempty"`
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, err
@@ -109,9 +110,14 @@ func (f *FeishuConn) SendMessage(params json.RawMessage) (interface{}, error) {
 		content = fmt.Sprintf(`{"text":"%s"}`, jsonEscape(req.Content))
 	}
 
+	receiveIDType := "open_id"
+	if req.ChatType == "group" {
+		receiveIDType = "chat_id"
+	}
+
 	_, err := f.client.Im.Message.Create(context.Background(),
 		larkim.NewCreateMessageReqBuilder().
-			ReceiveIdType("open_id").
+			ReceiveIdType(receiveIDType).
 			Body(larkim.NewCreateMessageReqBodyBuilder().
 				ReceiveId(req.ReceiveID).
 				MsgType(msgType).
@@ -130,6 +136,7 @@ func (f *FeishuConn) SendCardSync(params json.RawMessage) (interface{}, error) {
 	var req struct {
 		ReceiveID string                 `json:"receiveId"`
 		Card      map[string]interface{} `json:"card"`
+		ChatType  string                 `json:"chatType,omitempty"`
 	}
 	if err := json.Unmarshal(params, &req); err != nil {
 		return nil, err
@@ -140,9 +147,14 @@ func (f *FeishuConn) SendCardSync(params json.RawMessage) (interface{}, error) {
 		return nil, err
 	}
 
+	receiveIDType := "open_id"
+	if req.ChatType == "group" {
+		receiveIDType = "chat_id"
+	}
+
 	_, err = f.client.Im.Message.Create(context.Background(),
 		larkim.NewCreateMessageReqBuilder().
-			ReceiveIdType("open_id").
+			ReceiveIdType(receiveIDType).
 			Body(larkim.NewCreateMessageReqBodyBuilder().
 				ReceiveId(req.ReceiveID).
 				MsgType("interactive").
