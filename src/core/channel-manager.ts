@@ -101,15 +101,26 @@ export class ChannelManager {
   }
 
   async broadcastCard(sessionId: string, text: string, card: Record<string, unknown>): Promise<void> {
+    await this.broadcast(sessionId, { text, card });
+  }
+
+  async broadcastRich(sessionId: string, data: { content?: string; card?: Record<string, unknown>; attachments?: Array<{ type: string; data: unknown; language?: string }> }): Promise<void> {
+    const text = data.content || '';
     await Promise.all(
       Array.from(this.channels.values()).map((ch) => {
-        if (ch.capabilities.cards) {
-          return ch.send(sessionId, { text, card }).catch((err) => {
-            console.error(`[ChannelManager] ${ch.type} card send error:`, err);
-          });
+        const msg: OutgoingMessage = { text };
+        if (data.card && ch.capabilities.cards) {
+          msg.card = data.card;
         }
-        return ch.send(sessionId, { text }).catch((err) => {
-          console.error(`[ChannelManager] ${ch.type} text send error:`, err);
+        if (data.attachments && ch.capabilities.richText) {
+          msg.attachments = data.attachments.map(a => ({
+            type: a.type as 'code' | 'table',
+            data: a.data,
+            language: a.language,
+          } as import('../channels/types').MessageAttachment));
+        }
+        return ch.send(sessionId, msg).catch((err) => {
+          console.error(`[ChannelManager] ${ch.type} send error:`, err);
         });
       })
     );

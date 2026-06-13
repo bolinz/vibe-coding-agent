@@ -44,6 +44,8 @@ export interface ExecutionContext {
 
 export type StreamChunk =
   | { type: 'text'; content: string }
+  | { type: 'card'; card: Record<string, unknown> }
+  | { type: 'rich'; format: string; content: string; language?: string }
   | { type: 'tool_call'; toolCallId: string; toolName: string; toolArgs: Record<string, unknown> }
   | { type: 'tool_result'; toolCallId: string; result: unknown }
   | { type: 'error'; content: string }

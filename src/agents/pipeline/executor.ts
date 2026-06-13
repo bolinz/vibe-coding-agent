@@ -38,6 +38,7 @@ export class PipelineEngine {
     message: string,
     signal?: AbortSignal,
     workingDir?: string,
+    channelInfo?: { type: string; supports: string[] },
   ): AsyncGenerator<StreamChunk> {
     const agent = this.agentManager.get(agentName);
     if (!agent) {
@@ -49,8 +50,8 @@ export class PipelineEngine {
 
     if (signal?.aborted) return;
 
-    // Initialize runtime with working directory
-    await runtime.start(sessionId, agent, workingDir);
+    // Initialize runtime with working directory and channel info
+    await runtime.start(sessionId, agent, workingDir, channelInfo);
 
     if (signal?.aborted) {
       await runtime.cancel(sessionId);
@@ -95,11 +96,12 @@ export class PipelineEngine {
     sessionId: string,
     message: string,
     workingDir?: string,
+    channelInfo?: { type: string; supports: string[] },
   ): Promise<{ content: string; error?: string }> {
     const chunks: string[] = [];
     let error: string | undefined;
 
-    for await (const chunk of this.executeStream(agentName, sessionId, message, undefined, workingDir)) {
+    for await (const chunk of this.executeStream(agentName, sessionId, message, undefined, workingDir, channelInfo)) {
       if (chunk.type === 'text') {
         chunks.push(chunk.content);
       } else if (chunk.type === 'error') {

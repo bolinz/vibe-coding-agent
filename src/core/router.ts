@@ -109,7 +109,17 @@ export class Router {
       const configWorkDir = resolveWorkingDir(rawDir, process.env.HOME || '/tmp');
       const workingDir = resolveWorkingDir(session.context?.workingDir, process.env.HOME || '/tmp') || configWorkDir;
       const responseChunks: string[] = [];
+      let responseCard: Record<string, unknown> | undefined;
+      const responseAttachments: Array<{ type: string; data: unknown; language?: string }> = [];
       let responseError: string | undefined;
+
+      // Build channel info for agent
+      const channelCapabilities: string[] = [];
+      if (message.channel === 'feishu') channelCapabilities.push('cards', 'code', 'table');
+      if (message.channel === 'websocket') channelCapabilities.push('markdown', 'code');
+      const channelInfo = channelCapabilities.length > 0
+        ? { type: message.channel, supports: channelCapabilities }
+        : undefined;
 
       const abortController = new AbortController();
       this.runningPipelines.set(session.id, abortController);
@@ -121,6 +131,7 @@ export class Router {
           message.content,
           abortController.signal,
           workingDir,
+          channelInfo,
         )) {
           if (chunk.type === 'text') {
             responseChunks.push(chunk.content);
@@ -130,6 +141,10 @@ export class Router {
               data: { content: chunk.content },
               timestamp: new Date(),
             });
+          } else if (chunk.type === 'card') {
+            responseCard = chunk.card;
+          } else if (chunk.type === 'rich') {
+            responseAttachments.push({ type: chunk.format, data: chunk.content, language: chunk.language });
           } else if (chunk.type === 'error') {
             responseError = chunk.content;
           } else if (chunk.type === 'tool_call') {
@@ -175,9 +190,9 @@ export class Router {
 
       await this.sessionManager.addMessage(session.id, assistantMessage);
 
-      // 5. Only broadcast response if there's actual content
-      if (responseContent) {
-        await this.eventBus.broadcastToChannel(session, responseContent);
+      // 5. Broadcast structured response
+      if (responseContent || responseCard || responseAttachments.length > 0) {
+        await this.eventBus.broadcastToChannel(session, responseContent, responseCard, responseAttachments);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';

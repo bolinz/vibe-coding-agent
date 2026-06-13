@@ -306,4 +306,66 @@ export class FeishuCardBuilder {
       ],
     };
   }
+
+  buildCodeCard(code: string, lang?: string): Record<string, unknown> {
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: `📄 代码${lang ? ` (${lang})` : ''}` },
+        template: 'grey',
+      },
+      elements: [
+        { tag: 'hr' },
+        {
+          tag: 'div',
+          text: {
+            tag: 'lark_md',
+            content: `\`\`\`${lang || ''}\n${code.slice(0, 3000)}\n\`\`\``,
+          },
+        },
+      ],
+    };
+  }
+
+  buildTableCard(table: { headers: string[]; rows: string[][] }): Record<string, unknown> {
+    const headerRow = table.headers.map(h => ({ tag: 'markdown', content: `**${h}**` }));
+    const dataRows = table.rows.slice(0, 20).map(row =>
+      table.headers.map((_, i) => ({ tag: 'markdown', content: row[i] || '-' }))
+    );
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: '📊 数据表格' },
+        template: 'blue',
+      },
+      elements: [
+        { tag: 'hr' },
+        {
+          tag: 'table',
+          header: { style: { bold: true } },
+          columns: table.headers.map(h => ({ header: h })),
+          rows: table.rows.slice(0, 20).map(row => ({
+            cells: table.headers.map((_, i) => ({ text: row[i] || '-' })),
+          })),
+        },
+      ],
+    };
+  }
+
+  buildMarkdownCard(text: string): Record<string, unknown> {
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: '💬 AI Response' },
+        template: 'blue',
+      },
+      elements: [
+        { tag: 'hr' },
+        {
+          tag: 'div',
+          text: { tag: 'lark_md', content: text.slice(0, 4000) },
+        },
+      ],
+    };
+  }
 }

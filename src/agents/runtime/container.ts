@@ -3,6 +3,7 @@ import type { Agent, ContainerConfig, StreamChunk } from '../types';
 import type { RuntimeAdapter } from './types';
 import { ConfigManager } from '../../core/config';
 import type { EventBus } from '../../core/event';
+import { parseStreamText } from './parse-markers';
 
 export function buildContainerRunArgs(
   containerCmd: string,
@@ -72,8 +73,13 @@ export class ContainerRuntime implements RuntimeAdapter {
     });
   }
 
-  async start(sessionId: string, agent: Agent, workingDir?: string): Promise<void> {
+  async start(sessionId: string, agent: Agent, workingDir?: string, channelInfo?: { type: string; supports: string[] }): Promise<void> {
     this.agentMap.set(sessionId, { agent, workingDir });
+    // Channel info could be injected via agent.config.env for containers
+    if (channelInfo && agent.config.env) {
+      agent.config.env.SUBAGENT_CHANNEL = channelInfo.type;
+      agent.config.env.SUBAGENT_SUPPORTS = channelInfo.supports.join(',');
+    }
   }
 
   async stop(_sessionId: string): Promise<void> {
@@ -181,16 +187,27 @@ export class ContainerRuntime implements RuntimeAdapter {
       if (stdout) {
         const reader = stdout.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             const text = decoder.decode(value, { stream: true });
-            if (text) yield { type: 'text', content: text };
+            buffer += text;
+            const parsed = parseStreamText(buffer);
+            for (const p of parsed) {
+              if (p.type === 'card') yield p;
+              else if (p.type === 'rich') yield p;
+            }
+            if (parsed.length > 0) {
+              const last = parsed[parsed.length - 1];
+              buffer = last.type === 'text' ? last.content : '';
+            }
           }
         } finally {
           reader.releaseLock();
         }
+        if (buffer.trim()) yield { type: 'text', content: buffer };
       }
     } else {
       const stdout = proc.stdout as ReadableStream<Uint8Array> | undefined;
@@ -205,7 +222,12 @@ export class ContainerRuntime implements RuntimeAdapter {
       if (exitCode !== 0 && outputText) {
         yield { type: 'error', content: outputText };
       } else if (outputText) {
-        yield { type: 'text', content: outputText };
+        const parsed = parseStreamText(outputText);
+        for (const p of parsed) {
+          if (p.type === 'text' && p.content) yield p;
+          else if (p.type === 'card') yield p;
+          else if (p.type === 'rich') yield p;
+        }
       }
     }
 

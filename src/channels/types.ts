@@ -33,8 +33,10 @@ export interface Channel {
 // ===== 消息类型 =====
 
 export interface MessageAttachment {
-  type: 'image' | 'file' | 'link';
-  url: string;
+  type: 'image' | 'file' | 'link' | 'code' | 'table';
+  url?: string;
+  data?: unknown;
+  language?: string;
   name?: string;
   mimeType?: string;
   size?: number;

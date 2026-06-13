@@ -64,11 +64,16 @@ export class EventBus {
     });
   }
 
-  async broadcastToChannel(session: Session, content: string): Promise<void> {
+  async broadcastToChannel(
+    session: Session,
+    content: string,
+    card?: Record<string, unknown>,
+    attachments?: Array<{ type: string; data: unknown; language?: string }>,
+  ): Promise<void> {
     this.publish({
       type: 'agent.response',
       sessionId: session.id,
-      data: { content, messages: session.messages },
+      data: { content, card, attachments, messages: session.messages },
       timestamp: new Date()
     });
   }

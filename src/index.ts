@@ -141,9 +141,9 @@ async function main() {
 
   eventBus.subscribe('agent.response', (event) => {
     console.log(`[Event] Agent response for session ${event.sessionId}`);
-    const data = event.data as { content?: string };
-    if (!data.content) return;
-    channelManager.broadcastText(event.sessionId, data.content).catch((err) => {
+    const data = event.data as { content?: string; card?: Record<string, unknown>; attachments?: Array<{ type: string; data: unknown; language?: string }> };
+    if (!data.content && !data.card && !data.attachments?.length) return;
+    channelManager.broadcastRich(event.sessionId, data).catch((err) => {
       console.error('[ChannelManager] Broadcast error:', err);
     });
   });

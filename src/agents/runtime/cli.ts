@@ -1,6 +1,7 @@
 import { spawn } from 'bun';
 import type { Agent, StreamChunk } from '../types';
 import type { RuntimeAdapter } from './types';
+import { parseStreamText } from './parse-markers';
 
 interface CLISession {
   proc: ReturnType<typeof spawn>;
@@ -19,8 +20,12 @@ export class CLIRuntime implements RuntimeAdapter {
   private sessions = new Map<string, CLISession>();
   private agentMap = new Map<string, { agent: Agent; workingDir?: string }>();
 
-  async start(sessionId: string, agent: Agent, workingDir?: string): Promise<void> {
+  async start(sessionId: string, agent: Agent, workingDir?: string, channelInfo?: { type: string; supports: string[] }): Promise<void> {
     this.agentMap.set(sessionId, { agent, workingDir });
+    if (channelInfo && agent.config.env) {
+      agent.config.env.SUBAGENT_CHANNEL = channelInfo.type;
+      agent.config.env.SUBAGENT_SUPPORTS = channelInfo.supports.join(',');
+    }
   }
 
   async stop(_sessionId: string): Promise<void> {
@@ -125,7 +130,6 @@ export class CLIRuntime implements RuntimeAdapter {
       return;
     }
 
-    // Check for spawn-time error
     const spawnError = (s as CLISession & { _spawnError?: string })._spawnError;
     if (spawnError) {
       yield { type: 'error', content: spawnError };
@@ -141,16 +145,35 @@ export class CLIRuntime implements RuntimeAdapter {
       if (stdout) {
         const reader = stdout.getReader();
         const decoder = new TextDecoder();
+        let buffer = '';
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             const text = decoder.decode(value, { stream: true });
-            if (text) yield { type: 'text', content: text };
+            buffer += text;
+            // Process complete markers as they arrive
+            const parsed = parseStreamText(buffer);
+            // Only yield complete, non-text chunks immediately; text accumulates
+            for (const p of parsed) {
+              if (p.type === 'card') yield p;
+              else if (p.type === 'rich') yield p;
+            }
+            // Remove consumed portions from buffer
+            if (parsed.length > 0) {
+              const lastParsed = parsed[parsed.length - 1];
+              if (lastParsed.type === 'text') {
+                buffer = lastParsed.content; // keep remaining text
+              } else {
+                buffer = '';
+              }
+            }
           }
         } finally {
           reader.releaseLock();
         }
+        // Flush remaining buffer
+        if (buffer.trim()) yield { type: 'text', content: buffer };
       }
     } else {
       const stdout = proc.stdout as ReadableStream<Uint8Array> | undefined;
@@ -160,14 +183,18 @@ export class CLIRuntime implements RuntimeAdapter {
       const stderrText = stderr ? await new Response(stderr).text() : '';
       const exitCode = await proc.exited;
 
-      // Some CLIs (e.g. hermes) output errors to stdout with non-zero exit code.
-      // Prefer stdout if it has content; otherwise use stderr.
       const outputText = stdoutText.trim() || stderrText.trim();
 
       if (exitCode !== 0 && outputText) {
         yield { type: 'error', content: outputText };
       } else if (outputText) {
-        yield { type: 'text', content: outputText };
+        // Parse markers in non-streaming output
+        const parsed = parseStreamText(outputText);
+        for (const p of parsed) {
+          if (p.type === 'text' && p.content) yield p;
+          else if (p.type === 'card') yield p;
+          else if (p.type === 'rich') yield p;
+        }
       }
     }
 
