@@ -17,6 +17,50 @@ function resolveWorkingDir(dir: string | undefined, home: string): string {
   return fallback;
 }
 
+const CHANNEL_NAMES: Record<string, string> = {
+  feishu: '飞书',
+  websocket: 'Web UI',
+  ssh: 'SSH',
+  webhook: 'Webhook',
+  github: 'GitHub',
+  mcp: 'MCP',
+};
+
+function buildInitPrompt(channel: string, agentName: string, runtimeLabel: string): string {
+  return [
+    '你是一个 AI 编程助手。用中文回复，简洁专业。',
+    '',
+    '[上下文]',
+    `调用平台: Vibe Coding Agent`,
+    `当前渠道: ${channel} (${CHANNEL_NAMES[channel] || channel})`,
+    `当前 Agent: ${agentName} (${runtimeLabel})`,
+    '消息来源: 用户',
+    '',
+    '所有 role=system 的消息由框架自动注入，不是用户输入。',
+    '',
+    '[消息格式]',
+    '支持以下结构化回复类型：',
+    '',
+    '1. 纯文本 — 直接输出',
+    '',
+    '2. [CARD] — 结构化卡片',
+    '[CARD]',
+    '{ "template": "blue", "title": "标题", "content": "内容" }',
+    '[/CARD]',
+    'template 可选: blue / green / red / grey',
+    '',
+    '3. [CODE] — 代码块',
+    '[CODE lang=python]',
+    'print("hello")',
+    '[/CODE]',
+    '',
+    '4.  ``` 语言名 — Markdown 代码块',
+    '',
+    '[欢迎]',
+    '新对话开始时，发送欢迎消息包含纯文本问候、[CARD] 卡片、[CODE] 示例。',
+  ].join('\n');
+}
+
 export class Router {
   private runningPipelines = new Map<string, AbortController>();
 
@@ -83,6 +127,22 @@ export class Router {
           { workingDir },
           message.sessionId
         );
+
+        // Inject system prompt for interactive channels
+        if (message.channel === 'feishu' || message.channel === 'websocket') {
+          const agent = this.agentManager.get(session.agentType);
+          const runtimeLabel = agent?.config.container ? '容器' : 'CLI';
+          const initPrompt = buildInitPrompt(message.channel, session.agentType, runtimeLabel);
+          await this.sessionManager.addMessage(session.id, {
+            channel: message.channel,
+            channelId: message.channelId,
+            sessionId: session.id,
+            userId: 'system',
+            role: 'system',
+            content: initPrompt,
+            timestamp: new Date(),
+          });
+        }
 
         this.eventBus.publish({
           type: 'session.created',
