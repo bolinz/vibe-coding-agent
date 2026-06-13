@@ -93,6 +93,16 @@ export class Router {
   }
 
   getDefaultAgent(): string {
+    // Check hot-reloaded env var (set by config API's reload endpoint)
+    const envAgent = process.env.DEFAULT_AGENT;
+    if (envAgent && this.agentManager.has(envAgent)) return envAgent;
+    // Check DB config
+    try {
+      const cm = new ConfigManager();
+      const dbAgent = cm.get('default_agent');
+      if (dbAgent && this.agentManager.has(dbAgent)) return dbAgent;
+    } catch {}
+    // Fallback to constructor default
     return this.defaultAgent;
   }
 
@@ -125,7 +135,7 @@ export class Router {
         const workingDir = resolveWorkingDir(rawDir, process.env.HOME || '/tmp');
         session = await this.sessionManager.create(
           message.userId,
-          this.defaultAgent,
+          this.getDefaultAgent(),
           { workingDir },
           message.sessionId
         );
