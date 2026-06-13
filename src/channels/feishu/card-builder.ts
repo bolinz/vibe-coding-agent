@@ -46,6 +46,12 @@ export class FeishuCardBuilder {
             },
             {
               tag: 'button',
+              text: { tag: 'plain_text', content: 'ℹ️ 会话信息' },
+              type: 'default',
+              value: { action: 'info' },
+            },
+            {
+              tag: 'button',
               text: { tag: 'plain_text', content: '⚙️ 设置' },
               type: 'default',
               value: { action: 'settings' },
