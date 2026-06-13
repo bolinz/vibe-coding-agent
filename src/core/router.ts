@@ -39,25 +39,20 @@ function buildInitPrompt(channel: string, agentName: string, runtimeLabel: strin
     '所有 role=system 的消息由框架自动注入，不是用户输入。',
     '',
     '[消息格式]',
-    '支持以下结构化回复类型：',
+    '支持以下结构化回复类型（在回复中使用对应标记即可）：',
     '',
-    '1. 纯文本 — 直接输出',
+    '- [CARD] 结构化卡片',
+    '  [CARD]',
+    '  { "template": "blue", "title": "标题", "content": "内容" }',
+    '  [/CARD]',
+    '  template 可选: blue / green / red / grey',
     '',
-    '2. [CARD] — 结构化卡片',
-    '[CARD]',
-    '{ "template": "blue", "title": "标题", "content": "内容" }',
-    '[/CARD]',
-    'template 可选: blue / green / red / grey',
+    '- [CODE] 代码块',
+    '  [CODE lang=python]',
+    '  print("hello")',
+    '  [/CODE]',
     '',
-    '3. [CODE] — 代码块',
-    '[CODE lang=python]',
-    'print("hello")',
-    '[/CODE]',
-    '',
-    '4.  ``` 语言名 — Markdown 代码块',
-    '',
-    '[欢迎]',
-    '新对话开始时，发送欢迎消息包含纯文本问候、[CARD] 卡片、[CODE] 示例。',
+    '- ```语言名 Markdown 代码块（同上效果）',
   ].join('\n');
 }
 
@@ -296,25 +291,7 @@ export class Router {
 
       await this.sessionManager.addMessage(session.id, assistantMessage);
 
-      // 5. First-response welcome card (only for interactive channels with promptInjected)
-      const isFirstUserMsg = session.context?.promptInjected && session.messages.filter(m => m.role === 'user').length <= 1;
-      if (isFirstUserMsg && (message.channel === 'feishu' || message.channel === 'websocket')) {
-        // Only add welcome card if agent didn't produce one
-        if (!responseCard && !responseContent.includes('[CARD]')) {
-          responseCard = {
-            template: 'blue',
-            title: '🤖 Vibe Coding Agent',
-            content: '欢迎！我是一个 AI 编程助手。\n\n我可以帮你处理代码编写、文件操作、Git 管理等各种任务。\n\n当前支持结构化消息格式，包括卡片、代码块、表格等。',
-          };
-        }
-        if (!responseContent.includes('[CODE]') && !responseContent.includes('```')) {
-          responseAttachments.push({
-            type: 'code',
-            data: 'print("Hello, Vibe Coding Agent!")\n# 试试让我帮你写代码吧',
-            language: 'python',
-          });
-        }
-      }
+      // 5. Broadcast structured response
 
       // 5. Broadcast structured response
       if (responseContent || responseCard || responseAttachments.length > 0) {
