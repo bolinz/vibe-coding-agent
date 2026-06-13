@@ -56,6 +56,7 @@ export type AgentType = string; // Was union type; now any external CLI tool nam
 export interface SessionContext {
   workingDir?: string;
   env?: Record<string, string>;
+  promptInjected?: string;
 }
 
 // Agent types

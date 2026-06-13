@@ -128,28 +128,29 @@ export class Router {
           message.sessionId
         );
 
-        // Inject system prompt for interactive channels
-        if (message.channel === 'feishu' || message.channel === 'websocket') {
-          const agent = this.agentManager.get(session.agentType);
-          const runtimeLabel = agent?.config.container ? '容器' : 'CLI';
-          const initPrompt = buildInitPrompt(message.channel, session.agentType, runtimeLabel);
-          await this.sessionManager.addMessage(session.id, {
-            channel: message.channel,
-            channelId: message.channelId,
-            sessionId: session.id,
-            userId: 'system',
-            role: 'system',
-            content: initPrompt,
-            timestamp: new Date(),
-          });
-        }
-
         this.eventBus.publish({
           type: 'session.created',
           sessionId: session.id,
           data: { userId: message.userId },
           timestamp: new Date(),
         });
+      }
+
+      // Inject system prompt on first use for interactive channels
+      if ((message.channel === 'feishu' || message.channel === 'websocket') && !session.context?.promptInjected) {
+        const agent = this.agentManager.get(session.agentType);
+        const runtimeLabel = agent?.config.container ? '容器' : 'CLI';
+        const initPrompt = buildInitPrompt(message.channel, session.agentType, runtimeLabel);
+        await this.sessionManager.addMessage(session.id, {
+          channel: message.channel,
+          channelId: message.channelId,
+          sessionId: session.id,
+          userId: 'system',
+          role: 'system',
+          content: initPrompt,
+          timestamp: new Date(),
+        });
+        await this.sessionManager.updateContext(session.id, { promptInjected: 'true' });
       }
 
       // 2. Add message to session
