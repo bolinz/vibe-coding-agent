@@ -46,9 +46,9 @@ export class FeishuCardBuilder {
             },
             {
               tag: 'button',
-              text: { tag: 'plain_text', content: 'ℹ️ 会话信息' },
+              text: { tag: 'plain_text', content: '⚙️ 设置' },
               type: 'default',
-              value: { action: 'info' },
+              value: { action: 'settings' },
             },
           ],
         },
@@ -365,6 +365,33 @@ export class FeishuCardBuilder {
           tag: 'div',
           text: { tag: 'lark_md', content: text.slice(0, 4000) },
         },
+      ],
+    };
+  }
+
+  buildSettingsCard(currentDefault: string): Record<string, unknown> {
+    const agents = this.router.getAvailableAgents();
+    const buttons: Array<Record<string, unknown>> = agents.slice(0, 20).map((a, i) => ({
+      tag: 'button',
+      text: { tag: 'plain_text', content: `${i + 1}. ${a.name}` },
+      type: a.name === currentDefault ? 'primary' : 'default',
+      value: { action: 'set_default_agent', agent: a.name },
+    }));
+    buttons.push({
+      tag: 'button',
+      text: { tag: 'plain_text', content: '🔙 返回' },
+      type: 'danger',
+      value: { action: 'back_to_menu' },
+    });
+    return {
+      config: { wide_screen_mode: true },
+      header: {
+        title: { tag: 'plain_text', content: '⚙️ 设置' },
+        template: 'grey',
+      },
+      elements: [
+        { tag: 'div', text: { tag: 'lark_md', content: `**当前默认 Agent:** ${currentDefault}\n\n选择新的默认 Agent：` } },
+        { tag: 'action', actions: buttons },
       ],
     };
   }

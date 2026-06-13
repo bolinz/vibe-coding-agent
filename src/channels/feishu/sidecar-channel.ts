@@ -60,6 +60,7 @@ export class SidecarFeishuChannel implements Channel {
         router.getDefaultAgent(),
       )),
       (userId) => this.sendCard(userId, this.cardBuilder.buildAgentSelectCard()),
+      (userId) => this.sendCard(userId, this.cardBuilder.buildSettingsCard(router.getDefaultAgent())),
     );
   }
 
@@ -406,6 +407,23 @@ export class SidecarFeishuChannel implements Channel {
             toast: { type: 'error', content: '切换会话失败' },
           };
         }
+      }
+
+      case 'settings': {
+        this.menuState.setUserState(userId, 'settings');
+        return {
+          card: this.cardBuilder.buildSettingsCard(this.router.getDefaultAgent()),
+          toast: { type: 'info', content: '选择默认 Agent' },
+        };
+      }
+
+      case 'set_default_agent': {
+        const agentName = value?.agent as string;
+        const ok = this.router.setDefaultAgent(agentName);
+        return {
+          card: this.cardBuilder.buildSettingsCard(this.router.getDefaultAgent()),
+          toast: { type: ok ? 'success' : 'error', content: ok ? `默认 Agent 已设为 ${agentName}` : '设置失败' },
+        };
       }
 
       case 'info': {

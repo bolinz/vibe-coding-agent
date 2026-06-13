@@ -106,6 +106,16 @@ export class Router {
     return this.defaultAgent;
   }
 
+  setDefaultAgent(name: string): boolean {
+    if (!this.agentManager.has(name)) return false;
+    try {
+      const cm = new ConfigManager();
+      cm.set('default_agent', name);
+      process.env.DEFAULT_AGENT = name;
+      return true;
+    } catch { return false; }
+  }
+
   cancel(sessionId: string): void {
     const controller = this.runningPipelines.get(sessionId);
     if (controller) {
